@@ -465,21 +465,19 @@ static void CALLBACK mod_websocket_plugin_close(const WebSocketServer *
 /*
  * Read a buffer of data from the input stream.
  */
-static apr_status_t mod_websocket_read_nonblock(request_rec *r, char *buffer,
+static apr_status_t mod_websocket_read_nonblock(request_rec *r,
+                                                apr_bucket_brigade *bb,
+                                                char *buffer,
                                                 apr_size_t *bufsiz)
 {
-    apr_status_t rv = APR_ENOMEM;
-    apr_bucket_brigade *bb;
+    apr_status_t rv;
 
-    bb = apr_brigade_create(r->pool, r->connection->bucket_alloc);
-    if (bb != NULL) {
-        if ((rv =
-             ap_get_brigade(r->input_filters, bb, AP_MODE_READBYTES,
-                            APR_NONBLOCK_READ, *bufsiz)) == APR_SUCCESS) {
-            rv = apr_brigade_flatten(bb, buffer, bufsiz);
-        }
-        apr_brigade_destroy(bb);
+    if ((rv = ap_get_brigade(r->input_filters, bb, AP_MODE_READBYTES,
+                             APR_NONBLOCK_READ, *bufsiz)) == APR_SUCCESS) {
+        rv = apr_brigade_flatten(bb, buffer, bufsiz);
+        apr_brigade_cleanup(bb);
     }
+
     return rv;
 }
 
@@ -893,29 +891,17 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
 {
     WebSocketState *state = server->state;
     request_rec *r = state->r;
-    apr_pool_t *pool = NULL;
-    apr_bucket_alloc_t *bucket_alloc;
-    apr_bucket_brigade *obb;
+    apr_bucket_brigade *ibb, *obb;
     apr_pollset_t *pollset;
     apr_pollfd_t pollfd = { 0 };
     const apr_pollfd_t *signalled;
     apr_int32_t pollcnt;
     apr_queue_t * queue;
 
-    /* We cannot use the same bucket allocator for the ouput bucket brigade
-     * obb as the one associated with the connection (r->connection->bucket_alloc)
-     * because the same bucket allocator cannot be used in two different
-     * threads, and we use the connection bucket allocator in this
-     * thread - see docs on apr_bucket_alloc_create(). This results in
-     * occasional core dumps. So create our own bucket allocator and pool
-     * for output thread bucket brigade. (Thanks to Alex Bligh -- abligh)
-     */
-
-    if ((apr_pool_create(&pool, r->pool) == APR_SUCCESS) &&
-        ((bucket_alloc = apr_bucket_alloc_create(pool)) != NULL) &&
-        ((obb = apr_brigade_create(pool, bucket_alloc)) != NULL) &&
-        (apr_pollset_create(&pollset, 1, pool, APR_POLLSET_WAKEABLE) == APR_SUCCESS) &&
-        (apr_queue_create(&queue, QUEUE_CAPACITY, pool) == APR_SUCCESS)) {
+    if (((ibb = apr_brigade_create(r->pool, r->connection->bucket_alloc)) != NULL) &&
+        ((obb = apr_brigade_create(r->pool, r->connection->bucket_alloc)) != NULL) &&
+        (apr_pollset_create(&pollset, 1, r->pool, APR_POLLSET_WAKEABLE) == APR_SUCCESS) &&
+        (apr_queue_create(&queue, QUEUE_CAPACITY, r->pool) == APR_SUCCESS)) {
         unsigned char block[BLOCK_DATA_SIZE];
         apr_int64_t block_size;
         unsigned char status_code_buffer[2];
@@ -935,7 +921,7 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
         state->queue = queue;
 
         /* Initialize the pollset */
-        pollfd.p = pool;
+        pollfd.p = r->pool;
         pollfd.desc_type = APR_POLL_SOCKET;
         pollfd.reqevents = APR_POLLIN;
         pollfd.desc.s = ap_get_conn_socket(state->r->connection);
@@ -960,7 +946,7 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
 
             /* Check to see if there is any data to read. */
             block_size = sizeof(block);
-            rv = mod_websocket_read_nonblock(r, (char *)block, &block_size);
+            rv = mod_websocket_read_nonblock(r, ibb, (char *)block, &block_size);
 
             if (rv == APR_SUCCESS) {
                 mod_websocket_handle_incoming(server, block, block_size,
@@ -1026,8 +1012,9 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
                                     status_code_buffer,
                                     sizeof(status_code_buffer));
 
-        /* We are done with the bucket brigade */
+        /* We are done with the bucket brigades */
         state->obb = NULL;
+        apr_brigade_destroy(ibb);
         apr_brigade_destroy(obb);
 
         state->pollset = NULL;
