@@ -960,7 +960,9 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
 
             /* Check to see if there is any data to write. */
             do {
-                rv = apr_queue_trypop(state->queue, &msg);
+                void *el;
+                rv = apr_queue_trypop(state->queue, &el);
+                msg = el;
             } while (APR_STATUS_IS_EINTR(rv));
 
             if (rv == APR_SUCCESS) {
