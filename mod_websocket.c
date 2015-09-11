@@ -384,6 +384,14 @@ typedef struct
     size_t written;
 } WebSocketMessageData;
 
+/*
+ * Sends a buffer of data via the WebSocket. Returns the number of bytes that
+ * are actually written.
+ *
+ * If this function is called from a different thread than the one running the
+ * main framing loop, the message will be queued and the calling thread will
+ * block until the data is written by the main thread.
+ */
 static size_t CALLBACK mod_websocket_plugin_send(const WebSocketServer *server,
                                                  const int type,
                                                  const unsigned char *buffer,
@@ -884,6 +892,16 @@ static void mod_websocket_handle_outgoing(const WebSocketServer *server,
 /*
  * The data framing handler requires that the server state mutex is locked by
  * the caller upon entering this function. It will be locked when leaving too.
+ *
+ * The framing loop is the only place where data is written to or read from the
+ * socket via the bucket brigades, to prevent simultaneous access to the
+ * brigades.  Having a read-only thread and a write-only thread isn't good
+ * enough, because filters (mod_ssl in particular) may read from the socket
+ * during a write and vice-versa.
+ *
+ * The framing loop runs on the main request thread given to us by Apache.
+ * Outgoing messages queued from another thread (by mod_websocket_plugin_send())
+ * are dequeued and written here.
  */
 static void mod_websocket_data_framing(const WebSocketServer *server,
                                        websocket_config_rec *conf,
