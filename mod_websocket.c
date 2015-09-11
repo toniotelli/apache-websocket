@@ -890,6 +890,19 @@ static void mod_websocket_handle_outgoing(const WebSocketServer *server,
 }
 
 /*
+ * Compatibility wrapper for ap_get_conn_socket(), which doesn't exist in Apache
+ * 2.2.
+ */
+static apr_socket_t *get_conn_socket(conn_rec *conn)
+{
+#if AP_MODULE_MAGIC_AT_LEAST(20110605,2)
+    return ap_get_conn_socket(conn);
+#else
+    return ap_get_module_config(conn->conn_config, &core_module);
+#endif
+}
+
+/*
  * The data framing handler requires that the server state mutex is locked by
  * the caller upon entering this function. It will be locked when leaving too.
  *
@@ -942,7 +955,7 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
         pollfd.p = r->pool;
         pollfd.desc_type = APR_POLL_SOCKET;
         pollfd.reqevents = APR_POLLIN;
-        pollfd.desc.s = ap_get_conn_socket(state->r->connection);
+        pollfd.desc.s = get_conn_socket(state->r->connection);
         apr_pollset_add(pollset, &pollfd);
 
         state->pollset = pollset;
@@ -1184,9 +1197,8 @@ static int mod_websocket_method_handler(request_rec *r)
                          * Now that the connection has been established,
                          * disable the socket timeout
                          */
-                        apr_socket_timeout_set(ap_get_module_config
-                                               (r->connection->conn_config,
-                                                &core_module), -1);
+                        apr_socket_timeout_set(get_conn_socket(r->connection),
+                                               -1);
 
                         /* Set response status code and status line */
                         r->status = HTTP_SWITCHING_PROTOCOLS;
