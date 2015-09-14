@@ -1,0 +1,13 @@
+
+{
+   "outdir": "./test-results",
+   "servers": [
+                  {
+                     "agent": "AutobahnPython",
+                     "url": "ws://127.0.0.1/echo"
+                  }
+              ],
+   "cases": ["*"],
+   "exclude-cases": [],
+   "exclude-agent-cases": {}
+}
