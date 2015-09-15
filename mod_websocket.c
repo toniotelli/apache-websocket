@@ -653,7 +653,9 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
             }
             if ((state->masking == 0) ||   /* Client-side mask is required */
                 ((state->opcode >= 0x8) && /* Control opcodes cannot have a payload larger than 125 bytes */
-                 (state->payload_length_bytes_remaining != 0))) {
+                 (state->payload_length_bytes_remaining != 0)) ||
+                ((state->opcode == OPCODE_CLOSE) && /* Close payloads must be at least two bytes if not empty */
+                 (state->payload_length == 1))) {
                 state->framing_state = DATA_FRAMING_CLOSE;
                 state->status_code = STATUS_CODE_PROTOCOL_ERROR;
                 break;
