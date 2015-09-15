@@ -23,6 +23,7 @@ from distutils.version import StrictVersion
 import json
 import os.path
 import sys
+import textwrap
 import yamlish
 
 def filter_report(report):
@@ -38,6 +39,20 @@ def filter_report(report):
     ]
 
     return { key: report[key] for key in INTERESTING_KEYS }
+
+def prepare_description(report):
+    """Constructs a description from a test report."""
+    raw = report['description']
+
+    # Wrap to at most 80 characters.
+    wrapped = textwrap.wrap(raw, 80)
+    description = wrapped[0]
+
+    if len(wrapped) > 1:
+        # If the text is longer than one line, add an ellipsis.
+        description += '...'
+
+    return description
 
 #
 # MAIN
@@ -74,7 +89,7 @@ for test_id in test_ids:
         with open(path, 'r') as f:
             report = json.load(f)
 
-        description = '' # TODO
+        description = prepare_description(report)
 
     except Exception as e:
         description = '[could not load report file: {0!s}]'.format(e)
@@ -92,12 +107,12 @@ for test_id in test_ids:
         passed = False
 
     # Print the TAP result.
-    print('{0} {1} - [{2}] {3}{4}'.format('ok' if passed else 'not ok',
-                                          count,
-                                          test_id,
-                                          description,
-                                          ' # SKIP unimplemented' if skipped
-                                                                  else ''))
+    print(u'{0} {1} - [{2}] {3}{4}'.format('ok' if passed else 'not ok',
+                                           count,
+                                           test_id,
+                                           description,
+                                           ' # SKIP unimplemented' if skipped
+                                                                   else ''))
 
     # Print a YAMLish diagnostic for failed tests.
     if report and not passed:
