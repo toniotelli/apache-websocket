@@ -1,2 +1,3 @@
 autobahntestsuite>=0.7.2
+unittest2
 yamlish>=0.18.0
