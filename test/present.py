@@ -53,12 +53,15 @@ for test_id in test_ids:
     # TODO: try to get a better description from the test result file
     description = '[{0}]'.format(test_id)
 
-    if result['behavior'] != 'OK':
-        if result['behavior'] == 'UNIMPLEMENTED':
+    test_result = result['behavior']
+    close_result = result['behaviorClose']
+
+    if test_result != 'OK' and test_result != 'INFORMATIONAL':
+        if test_result == 'UNIMPLEMENTED':
             skipped = True
         else:
             passed = False
-    elif result['behaviorClose'] != 'OK':
+    elif close_result != 'OK' and close_result != 'INFORMATIONAL':
         passed = False
 
     # Print the TAP result.
