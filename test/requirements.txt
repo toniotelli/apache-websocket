@@ -1,1 +1,2 @@
 autobahntestsuite>=0.7.2
+yamlish>=0.18.0

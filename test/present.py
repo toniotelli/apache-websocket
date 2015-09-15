@@ -23,6 +23,25 @@ from distutils.version import StrictVersion
 import json
 import os.path
 import sys
+import yamlish
+
+def filter_report(report):
+    """Filters a test report dict down to only the interesting keys."""
+
+    INTERESTING_KEYS = [
+        'behavior',
+        'behaviorClose',
+        'expected',
+        'received',
+        'expectedClose',
+        'remoteCloseCode'
+    ]
+
+    return { key: report[key] for key in INTERESTING_KEYS }
+
+#
+# MAIN
+#
 
 # Read the index.
 results_dir = 'test-results'
@@ -45,17 +64,25 @@ for test_id in test_ids:
     count += 1
     passed = True
     skipped = False
+    report = None
 
     result = index[test_id]
-    path = os.path.join(results_dir, result['reportfile'])
 
-    # Interpret the result for this test.
-    # TODO: try to get a better description from the test result file
-    description = '[{0}]'.format(test_id)
+    # Try to get additional information from this test's report file.
+    try:
+        path = os.path.join(results_dir, result['reportfile'])
+        with open(path, 'r') as f:
+            report = json.load(f)
+
+        description = '' # TODO
+
+    except Exception as e:
+        description = '[could not load report file: {0!s}]'.format(e)
 
     test_result = result['behavior']
     close_result = result['behaviorClose']
 
+    # Interpret the result for this test.
     if test_result != 'OK' and test_result != 'INFORMATIONAL':
         if test_result == 'UNIMPLEMENTED':
             skipped = True
@@ -65,12 +92,19 @@ for test_id in test_ids:
         passed = False
 
     # Print the TAP result.
-    print('{0} {1} - {2}{3}'.format('ok' if passed else 'not ok',
-                                    count,
-                                    description,
-                                    ' # SKIP unimplemented' if skipped else ''))
+    print('{0} {1} - [{2}] {3}{4}'.format('ok' if passed else 'not ok',
+                                          count,
+                                          test_id,
+                                          description,
+                                          ' # SKIP unimplemented' if skipped
+                                                                  else ''))
 
-    # TODO: print diagnostics for debugging failed tests.
+    # Print a YAMLish diagnostic for failed tests.
+    if report and not passed:
+        output = filter_report(report)
+        diagnostic = yamlish.dumps(output)
+        for line in diagnostic.splitlines():
+            print('  ' + line)
 
     if not passed:
         failed_count += 1
