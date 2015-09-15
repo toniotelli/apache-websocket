@@ -38,10 +38,14 @@ print('TAP version 13')
 print('1..{0!s}'.format(len(test_ids)))
 
 count = 0
+skipped_count = 0
 failed_count = 0
 
 for test_id in test_ids:
     count += 1
+    passed = True
+    skipped = False
+
     result = index[test_id]
     path = os.path.join(results_dir, result['reportfile'])
 
@@ -50,30 +54,31 @@ for test_id in test_ids:
     description = '[{0}]'.format(test_id)
 
     if result['behavior'] != 'OK':
-        passed = False
+        if result['behavior'] == 'UNIMPLEMENTED':
+            skipped = True
+        else:
+            passed = False
     elif result['behaviorClose'] != 'OK':
         passed = False
-    else:
-        passed = True
 
     # Print the TAP result.
-    print('{0} {1} - {2}'.format('ok' if passed else 'not ok',
-                                 count,
-                                 description))
+    print('{0} {1} - {2}{3}'.format('ok' if passed else 'not ok',
+                                    count,
+                                    description,
+                                    ' # SKIP unimplemented' if skipped else ''))
 
     # TODO: print diagnostics for debugging failed tests.
 
     if not passed:
         failed_count += 1
+    if skipped:
+        skipped_count += 1
 
 # Print a final result.
-sys.stderr.write(
-    'Autobahn|TestSuite {0} ({1!s} total, {2!s} passed, {3!s} failed)\n'.format(
-        'PASSED' if not failed_count else 'FAILED',
-        count,
-        count - failed_count,
-        failed_count
-    )
-)
+print('# Autobahn|TestSuite {0}'.format('PASSED' if not failed_count else 'FAILED'))
+print('# total {0}'.format(count))
+print('# passed {0}'.format(count - failed_count - skipped_count))
+print('# skipped {0}'.format(skipped_count))
+print('# failed {0}'.format(failed_count))
 
 exit(0 if not failed_count else 1)
