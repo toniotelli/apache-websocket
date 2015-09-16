@@ -746,19 +746,34 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
 
                 if (state->masking) {
                     apr_int64_t i;
+                    int validate = 0; /* whether we need to validate UTF-8 */
+                    apr_int64_t skip_bytes = 0; /* number of bytes to skip during validation */
 
                     if (state->opcode == OPCODE_TEXT) {
+                        validate = 1;
+                    } else if (state->opcode == OPCODE_CLOSE) {
+                        /*
+                         * Skip the first two status bytes of the response;
+                         * they're not part of the UTF-8 payload.
+                         */
+                        validate = 1;
+                        skip_bytes = 2;
+                    }
+
+                    if (validate) {
                         unsigned int utf8_state = state->frame->utf8_state;
                         unsigned char c;
 
                         for (i = 0; i < block_data_length; i++) {
                             c = block[block_offset++] ^
                                 state->mask[state->mask_offset++ & 3];
-                            utf8_state =
-                                validate_utf8[utf8_state + c];
-                            if (utf8_state == UTF8_INVALID) {
-                                state->payload_length = block_data_length;
-                                break;
+                            if (application_data_offset >= skip_bytes) {
+                                utf8_state =
+                                    validate_utf8[utf8_state + c];
+                                if (utf8_state == UTF8_INVALID) {
+                                    state->payload_length = block_data_length;
+                                    break;
+                                }
                             }
                             application_data
                                 [application_data_offset++] = c;
@@ -776,9 +791,25 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
                     }
                 }
                 else if (block_data_length > 0) {
+                    /* TODO: consolidate this code with the branch above. */
+                    int validate = 0; /* whether we need to validate UTF-8 */
+                    apr_int64_t skip_bytes = 0; /* number of bytes to skip during validation */
+
                     memcpy(&application_data[application_data_offset],
                            &block[block_offset], block_data_length);
+
                     if (state->opcode == OPCODE_TEXT) {
+                        validate = 1;
+                    } else if (state->opcode == OPCODE_CLOSE) {
+                        /*
+                         * Skip the first two status bytes of the response;
+                         * they're not part of the UTF-8 payload.
+                         */
+                        validate = 1;
+                        skip_bytes = 2;
+                    }
+
+                    if (validate) {
                         apr_int64_t i, application_data_end =
                             application_data_offset +
                             block_data_length;
@@ -786,12 +817,14 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
 
                         for (i = application_data_offset;
                              i < application_data_end; i++) {
-                            utf8_state =
-                                validate_utf8[utf8_state +
-                                              application_data[i]];
-                            if (utf8_state == UTF8_INVALID) {
-                                state->payload_length = block_data_length;
-                                break;
+                            if (i >= skip_bytes) {
+                                utf8_state =
+                                    validate_utf8[utf8_state +
+                                                  application_data[i]];
+                                if (utf8_state == UTF8_INVALID) {
+                                    state->payload_length = block_data_length;
+                                    break;
+                                }
                             }
                         }
                         state->frame->utf8_state = utf8_state;
@@ -821,7 +854,11 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
                         break;
                     case OPCODE_CLOSE:
                         state->framing_state = DATA_FRAMING_CLOSE;
-                        state->status_code = STATUS_CODE_OK;
+                        if (state->frame->utf8_state != UTF8_VALID) {
+                            state->status_code = STATUS_CODE_INVALID_UTF8;
+                        } else {
+                            state->status_code = STATUS_CODE_OK;
+                        }
                         break;
                     case OPCODE_PING:
                         apr_thread_mutex_lock(server->state->mutex);
