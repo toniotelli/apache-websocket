@@ -568,6 +568,42 @@ typedef struct
     unsigned char mask[4];
 } WebSocketReadState;
 
+/*
+ * Checks the reason buffer for a Close frame and verifies that the status code
+ * (contained in the first two bytes) is not prohibited by RFC 6455.
+ */
+static int is_valid_status_code(const unsigned char *buffer, size_t buffer_size)
+{
+    unsigned short status;
+
+    if (buffer_size < 2) {
+        /* There is no status code; consider it valid. */
+        return 1;
+    }
+
+    /* The status code is in the first two bytes of the reason buffer. */
+    status  = buffer[0] << 8;
+    status |= buffer[1];
+
+    if (status < STATUS_CODE_OK) {
+        /* 0-999 are not used. */
+        return 0;
+    } else if (status == STATUS_CODE_RESERVED) {
+        /* Reserved -- old code from protocol version 8 */
+        return 0;
+    } else if ((status == 1005) ||
+               (status == 1006) ||
+               (status == 1015)) {
+        /* Prohibited -- reserved for client-side use. */
+        return 0;
+    } else if (status >= 5000) {
+        /* The spec only defines up to 4999... be conservative and reject. */
+        return 0;
+    }
+
+    return 1;
+}
+
 static void mod_websocket_handle_incoming(const WebSocketServer *server,
                                           unsigned char *block,
                                           apr_int64_t block_size,
@@ -854,7 +890,10 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
                         break;
                     case OPCODE_CLOSE:
                         state->framing_state = DATA_FRAMING_CLOSE;
-                        if (state->frame->utf8_state != UTF8_VALID) {
+                        if (!is_valid_status_code(application_data,
+                                                  application_data_offset)) {
+                            state->status_code = STATUS_CODE_PROTOCOL_ERROR;
+                        } else if (state->frame->utf8_state != UTF8_VALID) {
                             state->status_code = STATUS_CODE_INVALID_UTF8;
                         } else {
                             state->status_code = STATUS_CODE_OK;
