@@ -6,18 +6,7 @@ server. The module consists of a plugin architecture for handling WebSocket
 messaging. Doing so does _not_ require any knowledge of internal Apache
 structures.
 
-This implementation supports protocol versions 7, 8, and 13, along with the
-older draft-76 of the WebSocket protocol. Support for draft-75 is disabled by
-default, but it may be enabled through the draft-76 module configuration.
-
-Due to the extensive differences between the newer drafts and draft-76
-implementations, and because of the Apache module architecture, two separate
-modules are used to support the different protocols.
-
-Although draft-76 is technically obsolete, it is the protocol version that is
-currently implemented by most of the web browsers. When all of the browsers
-finally move to support the latest protocol, simply remove the draft-76 module
-and configuration to drop support.
+This implementation supports protocol versions 7, 8, and 13.
 
 ## Download
 
@@ -42,7 +31,6 @@ Alternatively, you may use `apxs` to build and install the module. Under Linux
 (at least under Ubuntu), use:
 
     $ sudo apxs2 -i -a -c mod_websocket.c
-    $ sudo apxs2 -i -a -c mod_websocket_draft76.c
 
 You probably only want to use the `-a` option the first time you issue the
 command, as it may overwrite your configuration each time you execute it (see
@@ -52,7 +40,6 @@ You may use `apxs` under Mac OS X if you do not want to use SCons. In that
 case, use:
 
     $ sudo apxs -i -a -c mod_websocket.c
-    $ sudo apxs -i -a -c mod_websocket_draft76.c
 
 ## Plugins
 
@@ -105,10 +92,7 @@ the `SetHandler` keyword, to `websocket-handler`. Next, add a
 `WebSocketHandler` entry that contains two parameters. The first is the name of
 the dynamic plugin library that will service the requests for the specified
 location, and the second is the name of the function in the dynamic library
-that will initialize the plugin. For the draft-76 implementation only, you may
-optionally include a flag for supporting the draft-75 version of the WebSocket
-protocol (it will default to "off" if you do not include it). It is enabled
-using the `SupportDraft75` keyword, along with a value of `On`.
+that will initialize the plugin.
 
 Here is an example of the configuration changes to `http.conf` that are used to
 handle the WebSocket plugin requests directed at `/echo` under Mac OS X. The
@@ -116,7 +100,6 @@ server will initialize the module by calling the `echo_init` function in
 `mod_websocket_echo.so`:
 
     LoadModule websocket_module   libexec/apache2/mod_websocket.so
-    LoadModule websocket_draft76_module   libexec/apache2/mod_websocket_draft76.so
 
     <IfModule mod_websocket.c>
       <Location /echo>
@@ -129,28 +112,10 @@ server will initialize the module by calling the `echo_init` function in
       </Location>
     </IfModule>
 
-    <IfModule mod_websocket_draft76.c>
-      <Location /echo>
-        SetHandler websocket-handler
-        WebSocketHandler libexec/apache2/mod_websocket_echo.so echo_init
-        SupportDraft75 On
-      </Location>
-      <Location /dumb-increment>
-        SetHandler websocket-handler
-        WebSocketHandler libexec/apache2/mod_websocket_dumb_increment.so dumb_increment_init
-        SupportDraft75 On
-      </Location>
-    </IfModule>
-
-If your settings are the same between the two modules, you may try to remove
-the `<IfModule mod_websocket_draft76.c>` section of the configuration (you will
-still need the `LoadModule` line if you want to support draft-76).
-
 Since we are dealing with messages, not streams, we need to specify a maximum
 message size. The default size is 32 megabytes. You may override this value by
-specifying a `MaxMessageSize` configuration setting. This option is not
-available for the draft-76 implementation. Here is an example of how to set
-the maximum message size is set to 64 megabytes:
+specifying a `MaxMessageSize` configuration setting. Here is an example of how
+to set the maximum message size is set to 64 megabytes:
 
     <IfModule mod_websocket.c>
       <Location /echo>
@@ -170,20 +135,11 @@ modules to see how it should look. Since the directory containing the module is
 different from Mac OS X, the configuration will look more like this:
 
     LoadModule websocket_module   /usr/lib/apache2/modules/mod_websocket.so
-    LoadModule websocket_draft76_module   /usr/lib/apache2/modules/mod_websocket_draft76.so
 
     <IfModule mod_websocket.c>
       <Location /echo>
         SetHandler websocket-handler
         WebSocketHandler /usr/lib/apache2/modules/mod_websocket_echo.so echo_init
-      </Location>
-    </IfModule>
-
-    <IfModule mod_websocket_draft76.c>
-      <Location /echo>
-        SetHandler websocket-handler
-        WebSocketHandler /usr/lib/apache2/modules/mod_websocket_echo.so echo_init
-        SupportDraft75 On
       </Location>
     </IfModule>
 
@@ -194,34 +150,11 @@ Under Windows, the initialization function is of the form `_echo_init@0`, as it
 is using the `__stdcall` calling convention:
 
     LoadModule websocket_module   modules/mod_websocket.so
-    LoadModule websocket_draft76_module   modules/mod_websocket_draft76.so
 
     <IfModule mod_websocket.c>
       <Location /echo>
         SetHandler websocket-handler
         WebSocketHandler modules/mod_websocket_echo.so _echo_init@0
-      </Location>
-    </IfModule>
-
-    <IfModule mod_websocket_draft76.c>
-      <Location /echo>
-        SetHandler websocket-handler
-        WebSocketHandler modules/mod_websocket_echo.so _echo_init@0
-        SupportDraft75 On
-      </Location>
-    </IfModule>
-
-For all architectures, to drop draft-76 support, remove the loading of the
-draft-76 module along with the module configuration block. Here is how the
-example configuration could look under Mac OS X after removing the the
-`websocket_draft76_module` references:
-
-    LoadModule websocket_module   libexec/apache2/mod_websocket.so
-
-    <IfModule mod_websocket.c>
-      <Location /echo>
-        SetHandler websocket-handler
-        WebSocketHandler libexec/apache2/mod_websocket_echo.so echo_init
       </Location>
     </IfModule>
 
