@@ -569,10 +569,51 @@ typedef struct
 } WebSocketReadState;
 
 /*
+ * Returns 1 if the given status code is prohibited from being sent by an
+ * endpoint.
+ */
+static int is_prohibited_status_code(unsigned short status)
+{
+    return (
+            /* 0-999 are not used. */
+            (status < STATUS_CODE_OK) ||
+
+            /* These three codes are reserved for client-side use. */
+            (status == 1005) ||
+            (status == 1006) ||
+            (status == 1015) ||
+
+            /* The spec only defines up to 4999. Be conservative and reject. */
+            (status >= 5000)
+           );
+}
+
+/*
+ * Returns 1 if the given status code is currently marked reserved/unassigned by
+ * the RFC and the close code registry, but it is not explicitly prohibited from
+ * being sent by an endpoint.
+ */
+static int is_reserved_status_code(unsigned short status)
+{
+    return (
+            /* Reserved -- old code from protocol version 8 */
+            (status == STATUS_CODE_RESERVED) ||
+
+            /* Unassigned. */
+            (status == 1014) ||
+            ((status >= 1016) && (status < 3000))
+           );
+}
+
+/*
  * Checks the reason buffer for a Close frame and verifies that the status code
  * (contained in the first two bytes) is not prohibited by RFC 6455.
+ *
+ * The reject_reserved parameter controls whether reserved/unassigned codes are
+ * rejected.
  */
-static int is_valid_status_code(const unsigned char *buffer, size_t buffer_size)
+static int is_valid_status_code(const unsigned char *buffer, size_t buffer_size,
+                                int reject_reserved)
 {
     unsigned short status;
 
@@ -585,23 +626,8 @@ static int is_valid_status_code(const unsigned char *buffer, size_t buffer_size)
     status  = buffer[0] << 8;
     status |= buffer[1];
 
-    if (status < STATUS_CODE_OK) {
-        /* 0-999 are not used. */
-        return 0;
-    } else if (status == STATUS_CODE_RESERVED) {
-        /* Reserved -- old code from protocol version 8 */
-        return 0;
-    } else if ((status == 1005) ||
-               (status == 1006) ||
-               (status == 1015)) {
-        /* Prohibited -- reserved for client-side use. */
-        return 0;
-    } else if (status >= 5000) {
-        /* The spec only defines up to 4999... be conservative and reject. */
-        return 0;
-    }
-
-    return 1;
+    return !is_prohibited_status_code(status) &&
+           !(reject_reserved && is_reserved_status_code(status));
 }
 
 static void mod_websocket_handle_incoming(const WebSocketServer *server,
@@ -891,7 +917,8 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
                     case OPCODE_CLOSE:
                         state->framing_state = DATA_FRAMING_CLOSE;
                         if (!is_valid_status_code(application_data,
-                                                  application_data_offset)) {
+                                                  application_data_offset,
+                                                  1)) {
                             state->status_code = STATUS_CODE_PROTOCOL_ERROR;
                         } else if (state->frame->utf8_state != UTF8_VALID) {
                             state->status_code = STATUS_CODE_INVALID_UTF8;
