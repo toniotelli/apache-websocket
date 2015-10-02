@@ -158,6 +158,17 @@ is using the `__stdcall` calling convention:
       </Location>
     </IfModule>
 
+By default, the module will reject close frame status codes in the official
+range (1000-2999) that are undefined/reserved for future use. You may use
+
+    WebSocketAllowReservedStatusCodes On
+
+to disable this protection, for instance when designing/testing an official
+addition to the WebSocket protocol. *Use this feature responsibly;* production
+systems should not generally enable it. Additionally, this feature does not
+allow the use of explicitly prohibited codes (1005, 1006, etc.). It is not a
+general "allow protocol violations" flag.
+
 ## Authors
 
 * The original code was written by `self.disconnect`.
