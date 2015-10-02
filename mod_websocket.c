@@ -56,6 +56,7 @@ typedef struct
     apr_dso_handle_t *res_handle;
     WebSocketPlugin *plugin;
     apr_int64_t payload_limit;
+    int allow_reserved; /* whether to allow reserved status codes */
 } websocket_config_rec;
 
 #define BLOCK_DATA_SIZE              4096
@@ -137,6 +138,18 @@ static apr_status_t mod_websocket_cleanup_config(void *data)
         }
     }
     return APR_SUCCESS;
+}
+
+static const char *mod_websocket_conf_allow_reserved(cmd_parms *cmd,
+                                                     void *confv, int on)
+{
+    websocket_config_rec *conf = (websocket_config_rec *)confv;
+
+    if (conf != NULL) {
+        conf->allow_reserved = on;
+    }
+
+    return NULL;
 }
 
 static const char *mod_websocket_conf_handler(cmd_parms *cmd, void *confv,
@@ -918,7 +931,7 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
                         state->framing_state = DATA_FRAMING_CLOSE;
                         if (!is_valid_status_code(application_data,
                                                   application_data_offset,
-                                                  1)) {
+                                                  !conf->allow_reserved)) {
                             state->status_code = STATUS_CODE_PROTOCOL_ERROR;
                         } else if (state->frame->utf8_state != UTF8_VALID) {
                             state->status_code = STATUS_CODE_INVALID_UTF8;
@@ -1356,6 +1369,9 @@ static int mod_websocket_method_handler(request_rec *r)
 }
 
 static const command_rec websocket_cmds[] = {
+    AP_INIT_FLAG("WebSocketAllowReservedStatusCodes",
+                 mod_websocket_conf_allow_reserved, NULL, OR_AUTHCFG,
+                 "Specifies whether endpoints may send reserved close status codes"),
     AP_INIT_TAKE2("WebSocketHandler", mod_websocket_conf_handler, NULL,
                   OR_AUTHCFG,
                   "Shared library containing WebSocket implementation followed by function initialization function name"),
