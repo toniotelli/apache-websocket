@@ -10,7 +10,7 @@ This implementation supports protocol versions 7, 8, and 13.
 
 ## Download
 
-    $ git clone git://github.com/disconnect/apache-websocket.git
+    $ git clone git://github.com/jchampio/apache-websocket.git
 
 ## Building and Installation
 
