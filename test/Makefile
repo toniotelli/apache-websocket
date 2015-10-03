@@ -2,4 +2,4 @@
 
 test:
 	wstest -m fuzzingclient
-	./present.py
+	./aggregate.py
