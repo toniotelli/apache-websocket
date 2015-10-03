@@ -7,7 +7,7 @@ This test script makes use of
 
 * Python 2.7.x (TestSuite doesn't do Python 3 yet)
 * [pip](https://pip.pypa.io/)
-* GNU Make (or just run wstest manually)
+* GNU Make (or just run each test suite manually)
 
 ## Setup
 
@@ -26,9 +26,9 @@ See your pip documentation for other installation options.
 ## Testing
 
 Compile and install the `mod_websocket_echo` example module (see the main
-project README for instructions). The test script assumes the module is
-listening at `ws://localhost/echo`; if this is not correct for your system,
-modify `fuzzingclient.json` to point to the correct URI.
+project README for instructions), include (or copy-paste) the `test.conf`
+snippet from this directory in your server config, and restart your server.
+(Note that the test suite assumes the server is running at `ws://localhost`.)
 
 Then, from this directory, run
 
@@ -42,11 +42,14 @@ favorite [TAP consumer](http://testanything.org/consumers.html), run the
 following *after* you have already run the test suite once and generated the
 `test-results` folder:
 
-    $ PYTHONIOENCODING=utf-8 ./present.py
+    $ ./aggregate.py
 
-This will output the results again without running the entire test suite. (The
-`PYTHONIOENCODING` envvar is to ensure that the script prints UTF-8 correctly;
-you'll know you've forgotten it if you get something like `UnicodeEncodeError:
-'ascii' codec can't encode character u'\xb5' in position 90: ordinal not in
-range(128)'`.)
+This will output the results again without re-running the Autobahn test suite.
 
+## Adding Tests
+
+New pytest suites can be added directly to the `pytest/` directory.
+
+If you need to run a program that isn't pytest-based, add it to the `commands`
+array in `tests.yaml`. Said program _must_ output valid TAP, version 13 or
+prior.
