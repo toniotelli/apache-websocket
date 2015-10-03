@@ -1,3 +1,6 @@
+autobahn>=0.10.7
 autobahntestsuite>=0.7.2
+pytest>=2.8.1
+pytest-twisted>=1.5
 unittest2
 yamlish>=0.18.0
