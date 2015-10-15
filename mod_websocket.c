@@ -25,6 +25,7 @@
  */
 
 #include "apr_base64.h"
+#include "apr_lib.h"
 #include "apr_queue.h"
 #include "apr_sha1.h"
 #include "apr_strings.h"
@@ -550,6 +551,47 @@ static void mod_websocket_parse_protocol(const WebSocketServer *server,
     if (!apr_is_empty_array(protocols)) {
         state->protocols = protocols;
     }
+}
+
+/*
+ * Parses the protocol version from a Sec-WebSocket-Version header. Returns -1
+ * if the version is invalid or prohibited by the RFC.
+ */
+static apr_int64_t parse_protocol_version(const char *version)
+{
+    size_t len;
+    apr_int64_t result;
+
+    if (!version) {
+        return -1;
+    }
+
+    len = strlen(version);
+
+    /*
+     * We perform our checks up front because apr_atoi64() is rather permissive
+     * in what it allows.
+     *
+     * The rules:
+     * - No empty strings.
+     * - All characters must be digits 0-9.
+     * - No leading zeroes ("0" is okay, but not "013").
+     * - Only values 0-255 are allowed.
+     */
+    if ((len < 1) || !apr_isdigit(version[0]) ||
+        ((len > 1) && (!apr_isdigit(version[1]) || (version[0] == '0'))) ||
+        ((len > 2) && !apr_isdigit(version[2])) ||
+        (len > 3)) {
+        return -1;
+    }
+
+    result = apr_atoi64(version);
+
+    if (result < 0 || result > 255) {
+        return -1;
+    }
+
+    return result;
 }
 
 typedef struct _WebSocketFrameData
@@ -1224,8 +1266,7 @@ static int mod_websocket_method_handler(request_rec *r)
             const char *sec_websocket_version =
                 apr_table_get(r->headers_in, "Sec-WebSocket-Version");
             apr_int64_t protocol_version =
-                (sec_websocket_version !=
-                 NULL) ? apr_atoi64(sec_websocket_version) : 0;
+                parse_protocol_version(sec_websocket_version);
 
             if ((host != NULL) &&
                 (sec_websocket_key != NULL) &&
