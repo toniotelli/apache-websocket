@@ -79,6 +79,13 @@ def bad_method_response(agent, request):
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
+@pytest.yield_fixture(params=['abcdef', '+13', '13sdfj', '1300', '013', '-1', '256'])
+def invalid_version_response(agent, request):
+    """All of the above "versions" are prohibited by the RFC."""
+    response = pytest.blockon(make_request(agent, version=request.param))
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
 #
 # Tests
 #
@@ -91,3 +98,6 @@ def test_valid_handshake_is_upgraded_correctly(agent):
 
 def test_handshake_is_refused_if_method_is_not_GET(bad_method_response):
     assert 400 <= bad_method_response.code < 500
+
+def test_handshake_is_refused_for_invalid_version(invalid_version_response):
+    assert invalid_version_response.code == 400
