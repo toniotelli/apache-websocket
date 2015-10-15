@@ -57,6 +57,21 @@ def assert_successful_upgrade(response):
 def agent():
     return client.Agent(reactor)
 
+@pytest.yield_fixture(params=['POST', 'PUT', 'DELETE', 'HEAD'])
+def bad_method_response(agent, request):
+    response = pytest.blockon(agent.request(request.param,
+                                            HOST + '/echo',
+                                            Headers({
+                                                "Upgrade": ["websocket"],
+                                                "Connection": ["Upgrade"],
+                                                "Sec-WebSocket-Key": [UPGRADE_KEY],
+                                                "Sec-WebSocket-Version": ["13"],
+                                            }),
+                                            None))
+
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
 #
 # Tests
 #
@@ -75,4 +90,7 @@ def test_valid_handshake_is_upgraded_correctly(agent):
 
     assert_successful_upgrade(response)
 
-    client.readBody(response).cancel()
+    client.readBody(response).cancel() # immediately close the connection
+
+def test_handshake_is_refused_if_method_is_not_GET(bad_method_response):
+    assert 400 <= bad_method_response.code < 500

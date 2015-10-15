@@ -1185,8 +1185,8 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
 static int mod_websocket_method_handler(request_rec *r)
 {
     if ((strcmp(r->handler, "websocket-handler") == 0) &&
-        (r->method_number == M_GET) && (r->parsed_uri.path != NULL) &&
-        (r->headers_in != NULL)) {
+        (r->method_number == M_GET) && !r->header_only &&
+        (r->parsed_uri.path != NULL) && (r->headers_in != NULL)) {
         const char *upgrade = apr_table_get(r->headers_in, "Upgrade");
         const char *connection = apr_table_get(r->headers_in, "Connection");
         int upgrade_connection = 0;
