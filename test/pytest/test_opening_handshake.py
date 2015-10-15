@@ -49,6 +49,22 @@ def assert_successful_upgrade(response):
     assert len(accept) == 1
     assert accept[0] == UPGRADE_ACCEPT
 
+def make_request(agent, method='GET', key=UPGRADE_KEY, version='13'):
+    """
+    Performs a WebSocket handshake using Agent#request. Returns whatever
+    Agent#request returns (which is a Deferred that should be waited on for the
+    server response).
+    """
+    return agent.request(method,
+                         HOST + '/echo',
+                         Headers({
+                             "Upgrade": ["websocket"],
+                             "Connection": ["Upgrade"],
+                             "Sec-WebSocket-Key": [key],
+                             "Sec-WebSocket-Version": [version],
+                         }),
+                         None)
+
 #
 # Fixtures
 #
@@ -59,16 +75,7 @@ def agent():
 
 @pytest.yield_fixture(params=['POST', 'PUT', 'DELETE', 'HEAD'])
 def bad_method_response(agent, request):
-    response = pytest.blockon(agent.request(request.param,
-                                            HOST + '/echo',
-                                            Headers({
-                                                "Upgrade": ["websocket"],
-                                                "Connection": ["Upgrade"],
-                                                "Sec-WebSocket-Key": [UPGRADE_KEY],
-                                                "Sec-WebSocket-Version": ["13"],
-                                            }),
-                                            None))
-
+    response = pytest.blockon(make_request(agent, method=request.param))
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
@@ -78,18 +85,8 @@ def bad_method_response(agent, request):
 
 @pytest.inlineCallbacks
 def test_valid_handshake_is_upgraded_correctly(agent):
-    response = yield agent.request('GET',
-                                   HOST + '/echo',
-                                   Headers({
-                                       "Upgrade": ["websocket"],
-                                       "Connection": ["Upgrade"],
-                                       "Sec-WebSocket-Key": [UPGRADE_KEY],
-                                       "Sec-WebSocket-Version": ["13"],
-                                   }),
-                                   None)
-
+    response = yield make_request(agent)
     assert_successful_upgrade(response)
-
     client.readBody(response).cancel() # immediately close the connection
 
 def test_handshake_is_refused_if_method_is_not_GET(bad_method_response):
