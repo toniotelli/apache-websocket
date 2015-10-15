@@ -1,4 +1,5 @@
 import pytest
+import re
 
 from twisted.internet import defer, reactor
 from twisted.web import client
@@ -49,6 +50,26 @@ def assert_successful_upgrade(response):
     assert len(accept) == 1
     assert accept[0] == UPGRADE_ACCEPT
 
+def assert_headers_match(actual_headers, expected_list):
+    """
+    Asserts that the header values in the given list match the expected list of
+    values. Headers will be split on commas.
+    """
+    # This regex matches all "OWS , OWS" separators in a header value.
+    sep_ex = re.compile(r"[ \t]*,[ \t]*")
+
+    actual_list = []
+    if actual_headers is None:
+        actual_headers = []
+
+    for header in actual_headers:
+        # Collapse list whitespace, then split on commas to get the list of
+        # values.
+        values = sep_ex.sub(',', header).split(',')
+        actual_list.extend(values)
+
+    assert actual_list == expected_list
+
 def make_request(agent, method='GET', key=UPGRADE_KEY, version='13'):
     """
     Performs a WebSocket handshake using Agent#request. Returns whatever
@@ -97,6 +118,16 @@ def invalid_version_response(agent, request):
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
+@pytest.yield_fixture(params=['0', '9', '14', '255'])
+def unsupported_version_response(agent, request):
+    """
+    A fixture that performs a correct handshake with an unsupported WebSocket
+    version.
+    """
+    response = pytest.blockon(make_request(agent, version=request.param))
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
 #
 # Tests
 #
@@ -109,3 +140,10 @@ def test_handshake_is_refused_if_method_is_not_GET(bad_method_response):
 
 def test_handshake_is_refused_for_invalid_version(invalid_version_response):
     assert invalid_version_response.code == 400
+
+def test_handshake_is_refused_for_unsupported_versions(unsupported_version_response):
+    assert unsupported_version_response.code == 400
+
+    # Make sure the server advertises its supported versions, as well.
+    versions = unsupported_version_response.headers.getRawHeaders("Sec-WebSocket-Version")
+    assert_headers_match(versions, ['13', '8', '7'])
