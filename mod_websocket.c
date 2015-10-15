@@ -599,6 +599,29 @@ static apr_int64_t parse_protocol_version(const char *version)
     return result;
 }
 
+/* Checks whether a string is a valid Sec-WebSocket-Key. */
+static int is_valid_key(const char *key)
+{
+    /*
+     * The key has to be a Base64-encoded value that decodes to 16 bytes long.
+     * That means a valid encoded value is exactly 24 bytes long, with one of
+     * the values 'A', 'Q', 'g', or 'w' for the final encoded character, and two
+     * bytes of padding ("==") at the end.
+     */
+    static const char * const base64_chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static const char * const final_chars = "AQgw";
+
+    if (!key) {
+        return 0;
+    }
+
+    return ((strlen(key) == 24) &&
+            (strspn(key, base64_chars) == 22) &&
+            (strspn(key + 21, final_chars) == 1) &&
+            (key[22] == '=') && (key[23] == '='));
+}
+
 /*
  * Checks whether or not a parsed protocol version is supported by this module.
  */
@@ -1310,7 +1333,7 @@ static int mod_websocket_method_handler(request_rec *r)
                 parse_protocol_version(sec_websocket_version);
 
             if ((host != NULL) &&
-                (sec_websocket_key != NULL) &&
+                is_valid_key(sec_websocket_key) &&
                 is_supported_version(protocol_version)) {
                 /* const char *sec_websocket_origin = apr_table_get(r->headers_in, "Sec-WebSocket-Origin"); */
                 /* const char *origin = apr_table_get(r->headers_in, "Origin"); */

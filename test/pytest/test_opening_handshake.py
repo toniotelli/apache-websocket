@@ -128,6 +128,17 @@ def unsupported_version_response(agent, request):
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
+@pytest.yield_fixture(params=["toosmall", "wayyyyyyyyyyyyyyyyyyyytoobig",
+                              "invalid!characters_89A==",
+                              "badlastcharacterinkey+==",
+                              "WRONGPADDINGLENGTH012A?=",
+                              "JUNKATENDOFPADDING456A=?"])
+def bad_key_response(agent, request):
+    """A fixture that performs a bad handshake with an invalid key."""
+    response = pytest.blockon(make_request(agent, key=request.param))
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
 #
 # Tests
 #
@@ -147,3 +158,6 @@ def test_handshake_is_refused_for_unsupported_versions(unsupported_version_respo
     # Make sure the server advertises its supported versions, as well.
     versions = unsupported_version_response.headers.getRawHeaders("Sec-WebSocket-Version")
     assert_headers_match(versions, ['13', '8', '7'])
+
+def test_handshake_is_refused_for_bad_key(bad_key_response):
+    assert bad_key_response.code == 400
