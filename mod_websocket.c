@@ -104,6 +104,11 @@ typedef struct
 #define STATUS_CODE_MESSAGE_TOO_LARGE 1009
 #define STATUS_CODE_INTERNAL_ERROR    1011
 
+/* The supported WebSocket protocol versions. */
+static int supported_versions[] = { 13, 8, 7 };
+static int supported_versions_len = sizeof(supported_versions) /
+                                    sizeof(supported_versions[0]);
+
 /*
  * Configuration
  */
@@ -592,6 +597,42 @@ static apr_int64_t parse_protocol_version(const char *version)
     }
 
     return result;
+}
+
+/*
+ * Checks whether or not a parsed protocol version is supported by this module.
+ */
+static int is_supported_version(apr_int64_t version)
+{
+    int i;
+
+    for (i = 0; i < supported_versions_len; ++i) {
+        if (version == supported_versions[i]) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * Creates a Sec-WebSocket-Version header value containing the supported
+ * protocol versions.
+ */
+static const char *make_supported_version_header(apr_pool_t *pool)
+{
+    apr_array_header_t *versions = apr_array_make(pool, supported_versions_len,
+                                                  sizeof(const char*));
+    int i;
+
+    /* Convert our supported versions to strings. */
+    for (i = 0; i < supported_versions_len; ++i) {
+        const char **new = (const char **) apr_array_push(versions);
+        *new = apr_itoa(pool, supported_versions[i]);
+    }
+
+    /* Concatenate the version strings into a single header value. */
+    return apr_array_pstrcat(pool, versions, ',');
 }
 
 typedef struct _WebSocketFrameData
@@ -1270,8 +1311,7 @@ static int mod_websocket_method_handler(request_rec *r)
 
             if ((host != NULL) &&
                 (sec_websocket_key != NULL) &&
-                ((protocol_version == 7) ||
-                 (protocol_version == 8) || (protocol_version == 13))) {
+                is_supported_version(protocol_version)) {
                 /* const char *sec_websocket_origin = apr_table_get(r->headers_in, "Sec-WebSocket-Origin"); */
                 /* const char *origin = apr_table_get(r->headers_in, "Origin"); */
                 /* We need to validate the Host and Origin -- FIXME */
@@ -1409,6 +1449,12 @@ static int mod_websocket_method_handler(request_rec *r)
                  * handshake failed, explicitly respond with 400 instead of passing
                  * this request to the next handler.
                  */
+                if (!is_supported_version(protocol_version)) {
+                    /* Tell the client what versions we support. */
+                    apr_table_setn(r->err_headers_out, "Sec-WebSocket-Version",
+                                   make_supported_version_header(r->pool));
+                }
+
                 return HTTP_BAD_REQUEST;
             }
         }
