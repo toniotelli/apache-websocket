@@ -1362,6 +1362,13 @@ static int mod_websocket_method_handler(request_rec *r)
 
                     return OK;
                 }
+            } else {
+                /*
+                 * If the client requested an upgrade to WebSocket, but the
+                 * handshake failed, explicitly respond with 400 instead of passing
+                 * this request to the next handler.
+                 */
+                return HTTP_BAD_REQUEST;
             }
         }
     }
