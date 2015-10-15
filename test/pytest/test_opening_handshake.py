@@ -73,15 +73,26 @@ def make_request(agent, method='GET', key=UPGRADE_KEY, version='13'):
 def agent():
     return client.Agent(reactor)
 
+@pytest.yield_fixture(params=['7', '8', '13'])
+def success_response(agent, request):
+    """A fixture that performs a correct handshake with the given version."""
+    response = pytest.blockon(make_request(agent, version=request.param))
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
 @pytest.yield_fixture(params=['POST', 'PUT', 'DELETE', 'HEAD'])
 def bad_method_response(agent, request):
+    """A fixture that performs a bad handshake with a disallowed HTTP method."""
     response = pytest.blockon(make_request(agent, method=request.param))
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
-@pytest.yield_fixture(params=['abcdef', '+13', '13sdfj', '1300', '013', '-1', '256'])
+@pytest.yield_fixture(params=['', 'abcdef', '+13', '13sdfj', '1300', '013',
+                              '-1', '256', '8_'])
 def invalid_version_response(agent, request):
-    """All of the above "versions" are prohibited by the RFC."""
+    """
+    A fixture that performs a bad handshake with a prohibited WebSocket version.
+    """
     response = pytest.blockon(make_request(agent, version=request.param))
     yield response
     client.readBody(response).cancel() # immediately close the connection
@@ -90,11 +101,8 @@ def invalid_version_response(agent, request):
 # Tests
 #
 
-@pytest.inlineCallbacks
-def test_valid_handshake_is_upgraded_correctly(agent):
-    response = yield make_request(agent)
-    assert_successful_upgrade(response)
-    client.readBody(response).cancel() # immediately close the connection
+def test_valid_handshake_is_upgraded_correctly(success_response):
+    assert_successful_upgrade(success_response)
 
 def test_handshake_is_refused_if_method_is_not_GET(bad_method_response):
     assert 400 <= bad_method_response.code < 500
