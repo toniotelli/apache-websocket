@@ -14,7 +14,11 @@ This implementation supports protocol versions 7, 8, and 13.
 
 ## Building and Installation
 
-SCons may be used to build the module.
+Several build options are available.
+
+### SCons
+
+SCons may be used to build the module:
 
     $ scons
     $ sudo scons install
@@ -26,6 +30,8 @@ will need to install the headers and libraries when installing Apache. The
 `Build Headers and Libraries` option is disabled by default, so you will have
 to perform a `Custom` installation of Apache. Refer to the Apache document
 entitled _Using Apache HTTP Server on Microsoft Windows_ for more information.
+
+### apxs[2]
 
 Alternatively, you may use `apxs` to build and install the module. Under Linux
 (at least under Ubuntu), use:
@@ -40,6 +46,15 @@ You may use `apxs` under Mac OS X if you do not want to use SCons. In that
 case, use:
 
     $ sudo apxs -i -a -c mod_websocket.c
+
+### CMake (Windows-only)
+
+An experimental `CMakeLists.txt` is provided for Windows CMake builds only. It
+is based on the CMake implementation provided by Apache httpd and attempts to
+follow its path conventions, so those already building httpd with CMake should
+feel at home.  Make sure that the `CMAKE_INSTALL_PREFIX` is correctly set to
+httpd's installation prefix when starting CMake, so that dependent libraries and
+header locations are detected for you.
 
 ## Plugins
 
