@@ -51,7 +51,14 @@
 #endif
 
 module AP_MODULE_DECLARE_DATA websocket_module;
+
+#ifdef APLOG_USE_MODULE /* only in Apache 2.4 */
 APLOG_USE_MODULE(websocket);
+#endif
+
+#ifndef APLOG_TRACE1 /* not defined in Apache 2.2 */
+#define APLOG_TRACE1 APLOG_DEBUG
+#endif
 
 typedef struct
 {
