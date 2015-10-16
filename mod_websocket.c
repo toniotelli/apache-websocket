@@ -517,6 +517,14 @@ static apr_status_t mod_websocket_read_nonblock(request_rec *r,
         apr_brigade_cleanup(bb);
     }
 
+    if ((rv == APR_SUCCESS) && (*bufsiz == 0)) {
+        /*
+         * For some reason, nonblocking reads can return APR_SUCCESS even when
+         * there was nothing actually read. Treat this as an EAGAIN.
+         */
+        rv = APR_EAGAIN;
+    }
+
     return rv;
 }
 
