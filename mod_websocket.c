@@ -33,6 +33,7 @@
 
 #include "httpd.h"
 #include "http_config.h"
+#include "http_log.h"
 #include "http_protocol.h"
 
 #include "websocket_plugin.h"
@@ -50,6 +51,7 @@
 #endif
 
 module AP_MODULE_DECLARE_DATA websocket_module;
+APLOG_USE_MODULE(websocket);
 
 typedef struct
 {
@@ -502,6 +504,9 @@ static apr_status_t mod_websocket_read_nonblock(request_rec *r,
     if ((rv = ap_get_brigade(r->input_filters, bb, AP_MODE_READBYTES,
                              APR_NONBLOCK_READ, *bufsiz)) == APR_SUCCESS) {
         rv = apr_brigade_flatten(bb, buffer, bufsiz);
+        ap_log_rerror(APLOG_MARK, APLOG_TRACE1, rv, r,
+                      "read %ld bytes from brigade", (long) *bufsiz);
+
         apr_brigade_cleanup(bb);
     }
 
@@ -1209,6 +1214,8 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
                 work_done = 1;
             }
             else if (!APR_STATUS_IS_EAGAIN(rv)) {
+                ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
+                              "trypop from outgoing queue failed");
                 read_state.status_code = STATUS_CODE_INTERNAL_ERROR;
                 break;
             }
@@ -1225,7 +1232,16 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
                 work_done = 1;
             }
             else if (!APR_STATUS_IS_EAGAIN(rv)) {
+                /*
+                 * APR_EOF just means the client aborted the TCP connection; no
+                 * point in spamming the logs with errors in that case.
+                 */
+                int log_level = APR_STATUS_IS_EOF(rv) ? APLOG_DEBUG : APLOG_ERR;
+                ap_log_rerror(APLOG_MARK, log_level, rv, r,
+                              "nonblocking read from input brigade failed");
+
                 read_state.status_code = STATUS_CODE_INTERNAL_ERROR;
+
                 break;
             }
 
@@ -1249,6 +1265,8 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
 
             if ((rv != APR_SUCCESS) && !APR_STATUS_IS_EINTR(rv) &&
                     !APR_STATUS_IS_TIMEUP(rv)) {
+                ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
+                              "poll from state->pollset failed");
                 read_state.status_code = STATUS_CODE_INTERNAL_ERROR;
                 break;
             }
@@ -1429,6 +1447,10 @@ static int mod_websocket_method_handler(request_rec *r)
                         /* Send the headers */
                         ap_send_interim_response(r, 1);
 
+                        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
+                                      r->connection,
+                                      "established new WebSocket connection");
+
                         /* The main data framing loop */
                         mod_websocket_data_framing(&server, conf,
                                                    plugin_private);
@@ -1458,7 +1480,10 @@ static int mod_websocket_method_handler(request_rec *r)
 
                         apr_thread_mutex_unlock(state.mutex);
                     }
+
                     /* Close the connection */
+                    ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
+                                  r->connection, "closing client connection");
                     ap_lingering_close(r->connection);
 
                     apr_thread_cond_destroy(state.cond);
