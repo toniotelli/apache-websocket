@@ -532,10 +532,8 @@ static apr_status_t mod_websocket_read_nonblock(request_rec *r,
  * Base64-encode the SHA-1 hash of the client-supplied key with the WebSocket
  * GUID appended to it.
  */
-static void mod_websocket_handshake(const WebSocketServer *server,
-                                    const char *key)
+static void mod_websocket_handshake(request_rec *r, const char *key)
 {
-    WebSocketState *state = server->state;
     apr_byte_t response[32];
     apr_byte_t digest[APR_SHA1_DIGESTSIZE];
     apr_sha1_ctx_t context;
@@ -549,8 +547,8 @@ static void mod_websocket_handshake(const WebSocketServer *server,
     len = apr_base64_encode_binary((char *)response, digest, sizeof(digest));
     response[len] = '\0';
 
-    apr_table_setn(state->r->headers_out, "Sec-WebSocket-Accept",
-                   apr_pstrdup(state->r->pool, (const char *)response));
+    apr_table_setn(r->headers_out, "Sec-WebSocket-Accept",
+                   apr_pstrdup(r->pool, (const char *)response));
 }
 
 /*
@@ -1415,7 +1413,7 @@ static int mod_websocket_method_handler(request_rec *r)
                     apr_table_setn(r->headers_out, "Connection", "Upgrade");
 
                     /* Set the expected acceptance response */
-                    mod_websocket_handshake(&server, sec_websocket_key);
+                    mod_websocket_handshake(r, sec_websocket_key);
 
                     /* Handle the WebSocket protocol */
                     if (sec_websocket_protocol != NULL) {
