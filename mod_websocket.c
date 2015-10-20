@@ -553,27 +553,29 @@ static void mod_websocket_handshake(request_rec *r, const char *key)
 
 /*
  * The client-supplied WebSocket protocol entry consists of a list of
- * client-side supported protocols. Parse the list, and create an array
- * containing those protocol names.
+ * client-side supported protocols. Parse the list, and populate an array with
+ * those protocol names.
  */
-static void mod_websocket_parse_protocol(const WebSocketServer *server,
-                                         const char *sec_websocket_protocol)
+static apr_status_t parse_protocol(const char *sec_websocket_protocol,
+                                   apr_array_header_t *protocols)
 {
-    WebSocketState *state = server->state;
-    apr_array_header_t *protocols =
-        apr_array_make(state->r->pool, 1, sizeof(char *));
     char *protocol_state = NULL;
-    char *protocol =
-        apr_strtok(apr_pstrdup(state->r->pool, sec_websocket_protocol),
-                   ", \t", &protocol_state);
+    char *protocol;
+
+    if (!sec_websocket_protocol) {
+        /* A missing header means we have no requested subprotocols. */
+        return APR_SUCCESS;
+    }
+
+    protocol = apr_strtok(apr_pstrdup(protocols->pool, sec_websocket_protocol),
+                          ", \t", &protocol_state);
 
     while (protocol != NULL) {
         APR_ARRAY_PUSH(protocols, char *) = protocol;
         protocol = apr_strtok(NULL, ", \t", &protocol_state);
     }
-    if (!apr_is_empty_array(protocols)) {
-        state->protocols = protocols;
-    }
+
+    return APR_SUCCESS;
 }
 
 /*
@@ -1360,8 +1362,10 @@ static int mod_websocket_method_handler(request_rec *r)
 {
     const char *host;
     const char *sec_websocket_key;
+    const char *sec_websocket_protocol;
     const char *sec_websocket_version;
     apr_int64_t protocol_version;
+    apr_array_header_t *protocols;
     websocket_config_rec *conf;
     ap_filter_t *input_filter;
 
@@ -1382,11 +1386,14 @@ static int mod_websocket_method_handler(request_rec *r)
      * Need to serialize the connections to minimize a denial of service attack -- FIXME
      */
 
-    host                  = apr_table_get(r->headers_in, "Host");
-    sec_websocket_key     = apr_table_get(r->headers_in, "Sec-WebSocket-Key");
-    sec_websocket_version = apr_table_get(r->headers_in,
-                                          "Sec-WebSocket-Version");
-    protocol_version      = parse_protocol_version(sec_websocket_version);
+    host                   = apr_table_get(r->headers_in, "Host");
+    sec_websocket_key      = apr_table_get(r->headers_in, "Sec-WebSocket-Key");
+    sec_websocket_protocol = apr_table_get(r->headers_in,
+                                           "Sec-WebSocket-Protocol");
+    sec_websocket_version  = apr_table_get(r->headers_in,
+                                           "Sec-WebSocket-Version");
+    protocol_version       = parse_protocol_version(sec_websocket_version);
+    protocols              = apr_array_make(r->pool, 1, sizeof(char *));
 
     /* const char *sec_websocket_origin = apr_table_get(r->headers_in, "Sec-WebSocket-Origin"); */
     /* const char *origin = apr_table_get(r->headers_in, "Origin"); */
@@ -1395,7 +1402,9 @@ static int mod_websocket_method_handler(request_rec *r)
     if ((r->method_number != M_GET) || r->header_only ||
         !host || !r->parsed_uri.path ||
         !is_valid_key(sec_websocket_key) ||
-        !is_supported_version(protocol_version)) {
+        !is_supported_version(protocol_version) ||
+        (parse_protocol(sec_websocket_protocol, protocols) != APR_SUCCESS)) {
+
         /*
          * If the client requested an upgrade to WebSocket, but the
          * handshake failed, explicitly respond with 400 instead of passing
@@ -1454,25 +1463,19 @@ static int mod_websocket_method_handler(request_rec *r)
             mod_websocket_protocol_set,
             mod_websocket_plugin_send, mod_websocket_plugin_close
         };
-        const char *sec_websocket_protocol =
-            apr_table_get(r->headers_in, "Sec-WebSocket-Protocol");
         void *plugin_private = NULL;
 
         /* Handle the WebSocket protocol */
-        if (sec_websocket_protocol != NULL) {
-            /* Parse the WebSocket protocol entry */
-            mod_websocket_parse_protocol(&server,
-                                         sec_websocket_protocol);
+        if (!apr_is_empty_array(protocols)) {
+            state.protocols = protocols;
 
-            if (mod_websocket_protocol_count(&server) > 0) {
-                /*
-                 * Default to using the first protocol in the list
-                 * (plugin should overide this in on_connect)
-                 */
-                mod_websocket_protocol_set(&server,
-                                           mod_websocket_protocol_index
-                                           (&server, 0));
-            }
+            /*
+             * Default to using the first protocol in the list
+             * (plugin should overide this in on_connect)
+             */
+            mod_websocket_protocol_set(&server,
+                                       mod_websocket_protocol_index
+                                       (&server, 0));
         }
 
         apr_thread_mutex_create(&state.mutex,
