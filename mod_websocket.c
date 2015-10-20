@@ -1353,6 +1353,103 @@ static int is_websocket_upgrade(request_rec *r)
 }
 
 /*
+ * This function creates the WebSocketState and WebSocketServer structures that
+ * will be used for the entire connection, sets up the plugin that will handle
+ * communication, sends the 101 to upgrade the connection, and starts the
+ * framing loop.
+ */
+static void handle_websocket_connection(request_rec *r,
+                                        websocket_config_rec *conf,
+                                        apr_int64_t protocol_version,
+                                        apr_array_header_t *protocols)
+{
+    WebSocketState state = {
+        r, NULL, apr_os_thread_current(), NULL, NULL, protocols, 0,
+        protocol_version, NULL, NULL
+    };
+    WebSocketServer server = {
+        sizeof(WebSocketServer), 1, &state,
+        mod_websocket_request, mod_websocket_header_get,
+        mod_websocket_header_set,
+        mod_websocket_protocol_count,
+        mod_websocket_protocol_index,
+        mod_websocket_protocol_set,
+        mod_websocket_plugin_send, mod_websocket_plugin_close
+    };
+    void *plugin_private = NULL;
+
+    apr_thread_mutex_create(&state.mutex,
+                            APR_THREAD_MUTEX_DEFAULT,
+                            r->pool);
+    apr_thread_cond_create(&state.cond, r->pool);
+
+    apr_thread_mutex_lock(state.mutex);
+
+    /*
+     * If the plugin supplies an on_connect function, it must
+     * return non-null on success
+     */
+    if ((conf->plugin->on_connect == NULL) ||
+        ((plugin_private =
+          conf->plugin->on_connect(&server)) != NULL)) {
+        /*
+         * Now that the connection has been established,
+         * disable the socket timeout
+         */
+        apr_socket_timeout_set(get_conn_socket(r->connection),
+                               -1);
+
+        /* Set response status code and status line */
+        r->status = HTTP_SWITCHING_PROTOCOLS;
+        r->status_line = ap_get_status_line(r->status);
+
+        /* Send the headers */
+        ap_send_interim_response(r, 1);
+
+        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
+                      r->connection,
+                      "established new WebSocket connection");
+
+        /* The main data framing loop */
+        mod_websocket_data_framing(&server, conf,
+                                   plugin_private);
+
+        /* Wake up any waiting plugin_sends before closing */
+        apr_thread_cond_broadcast(state.cond);
+
+        apr_thread_mutex_unlock(state.mutex);
+
+        /* Tell the plugin that we are disconnecting */
+        if (conf->plugin->on_disconnect != NULL) {
+            conf->plugin->on_disconnect(plugin_private,
+                                        &server);
+        }
+        r->connection->keepalive = AP_CONN_CLOSE;
+    }
+    else {
+        apr_table_clear(r->headers_out);
+
+        /* The connection has been refused */
+        r->status = HTTP_FORBIDDEN;
+        r->status_line = ap_get_status_line(r->status);
+        r->header_only = 1;
+        r->connection->keepalive = AP_CONN_CLOSE;
+
+        ap_send_error_response(r, 0);
+
+        apr_thread_mutex_unlock(state.mutex);
+    }
+
+    /* Close the connection */
+    ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
+                  r->connection, "closing client connection");
+    ap_lingering_close(r->connection);
+
+    apr_thread_cond_destroy(state.cond);
+    apr_thread_mutex_destroy(state.mutex);
+}
+
+/*
  * This is the WebSocket request handler. Since WebSocket headers are quite
  * similar to HTTP headers, we will use most of the HTTP protocol handling
  * code. The difference is that we will disable the HTTP content body handling,
@@ -1449,92 +1546,8 @@ static int mod_websocket_method_handler(request_rec *r)
     /* Set the expected acceptance response */
     mod_websocket_handshake(r, sec_websocket_key);
 
-    {
-        WebSocketState state = {
-            r, NULL, apr_os_thread_current(), NULL, NULL, protocols, 0,
-            protocol_version, NULL, NULL
-        };
-        WebSocketServer server = {
-            sizeof(WebSocketServer), 1, &state,
-            mod_websocket_request, mod_websocket_header_get,
-            mod_websocket_header_set,
-            mod_websocket_protocol_count,
-            mod_websocket_protocol_index,
-            mod_websocket_protocol_set,
-            mod_websocket_plugin_send, mod_websocket_plugin_close
-        };
-        void *plugin_private = NULL;
-
-        apr_thread_mutex_create(&state.mutex,
-                                APR_THREAD_MUTEX_DEFAULT,
-                                r->pool);
-        apr_thread_cond_create(&state.cond, r->pool);
-
-        apr_thread_mutex_lock(state.mutex);
-
-        /*
-         * If the plugin supplies an on_connect function, it must
-         * return non-null on success
-         */
-        if ((conf->plugin->on_connect == NULL) ||
-            ((plugin_private =
-              conf->plugin->on_connect(&server)) != NULL)) {
-            /*
-             * Now that the connection has been established,
-             * disable the socket timeout
-             */
-            apr_socket_timeout_set(get_conn_socket(r->connection),
-                                   -1);
-
-            /* Set response status code and status line */
-            r->status = HTTP_SWITCHING_PROTOCOLS;
-            r->status_line = ap_get_status_line(r->status);
-
-            /* Send the headers */
-            ap_send_interim_response(r, 1);
-
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
-                          r->connection,
-                          "established new WebSocket connection");
-
-            /* The main data framing loop */
-            mod_websocket_data_framing(&server, conf,
-                                       plugin_private);
-
-            /* Wake up any waiting plugin_sends before closing */
-            apr_thread_cond_broadcast(state.cond);
-
-            apr_thread_mutex_unlock(state.mutex);
-
-            /* Tell the plugin that we are disconnecting */
-            if (conf->plugin->on_disconnect != NULL) {
-                conf->plugin->on_disconnect(plugin_private,
-                                            &server);
-            }
-            r->connection->keepalive = AP_CONN_CLOSE;
-        }
-        else {
-            apr_table_clear(r->headers_out);
-
-            /* The connection has been refused */
-            r->status = HTTP_FORBIDDEN;
-            r->status_line = ap_get_status_line(r->status);
-            r->header_only = 1;
-            r->connection->keepalive = AP_CONN_CLOSE;
-
-            ap_send_error_response(r, 0);
-
-            apr_thread_mutex_unlock(state.mutex);
-        }
-
-        /* Close the connection */
-        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
-                      r->connection, "closing client connection");
-        ap_lingering_close(r->connection);
-
-        apr_thread_cond_destroy(state.cond);
-        apr_thread_mutex_destroy(state.mutex);
-    }
+    /* We're ready to go. Take control of the connection. */
+    handle_websocket_connection(r, conf, protocol_version, protocols);
 
     return OK;
 }
