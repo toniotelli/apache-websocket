@@ -1468,14 +1468,6 @@ static int mod_websocket_method_handler(request_rec *r)
         /* Handle the WebSocket protocol */
         if (!apr_is_empty_array(protocols)) {
             state.protocols = protocols;
-
-            /*
-             * Default to using the first protocol in the list
-             * (plugin should overide this in on_connect)
-             */
-            mod_websocket_protocol_set(&server,
-                                       mod_websocket_protocol_index
-                                       (&server, 0));
         }
 
         apr_thread_mutex_create(&state.mutex,

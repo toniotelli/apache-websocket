@@ -4,7 +4,7 @@ import re
 from twisted.internet import defer, reactor
 from twisted.web import client
 
-from testutil.websocket import make_request, UPGRADE_ACCEPT
+from testutil.websocket import assert_successful_upgrade, make_request
 
 # XXX for the xxx_headerReceived monkey-patch
 from twisted.web._newclient import HTTPParser
@@ -25,23 +25,6 @@ def xxx_headerReceived(self, name, value):
 
 HTTPParser._oldHeaderReceived = HTTPParser.headerReceived
 HTTPParser.headerReceived = xxx_headerReceived
-
-def assert_successful_upgrade(response):
-    # The server must upgrade with a 101 response.
-    assert response.code == 101
-
-    # We need to see Connection: Upgrade and Upgrade: websocket.
-    connection = response.headers.getRawHeaders("Connection")
-    assert "upgrade" in [h.lower() for h in connection]
-
-    upgrade = response.headers.getRawHeaders("Upgrade")
-    assert len(upgrade) == 1
-    assert upgrade[0].lower() == "websocket"
-
-    # The Sec-WebSocket-Accept header should match our precomputed digest.
-    accept = response.headers.getRawHeaders("Sec-WebSocket-Accept")
-    assert len(accept) == 1
-    assert accept[0] == UPGRADE_ACCEPT
 
 def assert_headers_match(actual_headers, expected_list):
     """
