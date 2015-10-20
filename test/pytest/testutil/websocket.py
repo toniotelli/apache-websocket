@@ -30,8 +30,8 @@ def assert_successful_upgrade(response):
     assert len(accept) == 1
     assert accept[0] == UPGRADE_ACCEPT
 
-def make_request(agent, method='GET', key=UPGRADE_KEY, version='13',
-                 protocol=None):
+def make_request(agent, method='GET', path='/echo', key=UPGRADE_KEY,
+                 version='13', protocol=None):
     """
     Performs a WebSocket handshake using Agent#request. Returns whatever
     Agent#request returns (which is a Deferred that should be waited on for the
@@ -48,6 +48,6 @@ def make_request(agent, method='GET', key=UPGRADE_KEY, version='13',
         hdrs["Sec-WebSocket-Protocol"] = [protocol]
 
     return agent.request(method,
-                         HOST + '/echo',
+                         HOST + path,
                          Headers(hdrs),
                          None)

@@ -25,10 +25,11 @@ See your pip documentation for other installation options.
 
 ## Testing
 
-Compile and install the `mod_websocket_echo` example module (see the main
-project README for instructions), include (or copy-paste) the `test.conf`
-snippet from this directory in your server config, and restart your server.
-(Note that the test suite assumes the server is running at `ws://localhost`.)
+Compile and install the `mod_websocket_echo` and `mod_websocket_dumb_increment`
+example modules (see the main project README for instructions), include (or
+copy-paste) the `test.conf` snippet from this directory in your server config,
+and restart your server.  (Note that the test suite assumes the server is
+running at `ws://localhost`.)
 
 Then, from this directory, run
 
