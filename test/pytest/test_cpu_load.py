@@ -3,12 +3,8 @@ import pytest
 
 from twisted.internet import reactor
 from twisted.web import client
-from twisted.web.http_headers import Headers
 
-HOST = 'http://127.0.0.1'
-
-# from `openssl rand -base64 16`
-UPGRADE_KEY = '36zg57EA+cDLixMBxrDj4g=='
+from testutil.websocket import make_request
 
 # The maximum CPU usage we consider acceptable.
 MAX_CPU_PERCENTAGE = 50
@@ -16,22 +12,6 @@ MAX_CPU_PERCENTAGE = 50
 #
 # Helpers
 #
-
-def make_request(agent, method='GET', key=UPGRADE_KEY, version='13'):
-    """
-    Performs a WebSocket handshake using Agent#request. Returns whatever
-    Agent#request returns (which is a Deferred that should be waited on for the
-    server response).
-    """
-    return agent.request(method,
-                         HOST + '/echo',
-                         Headers({
-                             "Upgrade": ["websocket"],
-                             "Connection": ["Upgrade"],
-                             "Sec-WebSocket-Key": [key],
-                             "Sec-WebSocket-Version": [version],
-                         }),
-                         None)
 
 def any_cpus_railed():
    """Returns True if any CPU cores have crossed the MAX_CPU_PERCENTAGE."""

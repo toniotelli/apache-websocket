@@ -3,18 +3,11 @@ import re
 
 from twisted.internet import defer, reactor
 from twisted.web import client
-from twisted.web.http_headers import Headers
+
+from testutil.websocket import make_request, UPGRADE_ACCEPT
 
 # XXX for the xxx_headerReceived monkey-patch
 from twisted.web._newclient import HTTPParser
-
-HOST = 'http://127.0.0.1'
-
-# from `openssl rand -base64 16`
-UPGRADE_KEY = '36zg57EA+cDLixMBxrDj4g=='
-
-# base64(SHA1(UPGRADE_KEY:"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
-UPGRADE_ACCEPT = 'eGic2At3BJQkGyA4Dq+3nczxEJo='
 
 #
 # Helpers
@@ -69,28 +62,6 @@ def assert_headers_match(actual_headers, expected_list):
         actual_list.extend(values)
 
     assert actual_list == expected_list
-
-def make_request(agent, method='GET', key=UPGRADE_KEY, version='13',
-                 protocol=None):
-    """
-    Performs a WebSocket handshake using Agent#request. Returns whatever
-    Agent#request returns (which is a Deferred that should be waited on for the
-    server response).
-    """
-    hdrs = {
-        "Upgrade": ["websocket"],
-        "Connection": ["Upgrade"],
-        "Sec-WebSocket-Key": [key],
-        "Sec-WebSocket-Version": [version],
-    }
-
-    if protocol is not None:
-        hdrs["Sec-WebSocket-Protocol"] = [protocol]
-
-    return agent.request(method,
-                         HOST + '/echo',
-                         Headers(hdrs),
-                         None)
 
 #
 # Fixtures
