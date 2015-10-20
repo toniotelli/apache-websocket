@@ -771,12 +771,12 @@ static int is_valid_status_code(const unsigned char *buffer, size_t buffer_size,
 
 static void mod_websocket_handle_incoming(const WebSocketServer *server,
                                           unsigned char *block,
-                                          apr_int64_t block_size,
+                                          apr_size_t block_size,
                                           WebSocketReadState *state,
                                           websocket_config_rec *conf,
                                           void *plugin_private)
 {
-    apr_int64_t block_offset = 0;
+    apr_size_t block_offset = 0;
 
     while (block_offset < block_size) {
         switch (state->framing_state) {
@@ -1178,7 +1178,7 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
         (apr_pollset_create(&pollset, 1, r->pool, APR_POLLSET_WAKEABLE) == APR_SUCCESS) &&
         (apr_queue_create(&queue, QUEUE_CAPACITY, r->pool) == APR_SUCCESS)) {
         unsigned char block[BLOCK_DATA_SIZE];
-        apr_int64_t block_size;
+        apr_size_t block_size;
         unsigned char status_code_buffer[2];
         WebSocketReadState read_state = { 0 };
 
