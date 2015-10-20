@@ -1521,7 +1521,11 @@ static int mod_websocket_method_handler(request_rec *r)
                                                          &websocket_module);
 
     if (!conf || !conf->plugin) {
-        return DECLINED; /* TODO: return 500 instead; this shouldn't happen */
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
+                      "no WebSocket plugin is assigned for location %s (did "
+                      "you forget to define a WebSocketHandler?)",
+                      r->parsed_uri.path);
+        return HTTP_INTERNAL_SERVER_ERROR;
     }
 
     /*
