@@ -1451,7 +1451,7 @@ static int mod_websocket_method_handler(request_rec *r)
 
     {
         WebSocketState state = {
-            r, NULL, apr_os_thread_current(), NULL, NULL, NULL, 0,
+            r, NULL, apr_os_thread_current(), NULL, NULL, protocols, 0,
             protocol_version, NULL, NULL
         };
         WebSocketServer server = {
@@ -1464,11 +1464,6 @@ static int mod_websocket_method_handler(request_rec *r)
             mod_websocket_plugin_send, mod_websocket_plugin_close
         };
         void *plugin_private = NULL;
-
-        /* Handle the WebSocket protocol */
-        if (!apr_is_empty_array(protocols)) {
-            state.protocols = protocols;
-        }
 
         apr_thread_mutex_create(&state.mutex,
                                 APR_THREAD_MUTEX_DEFAULT,
