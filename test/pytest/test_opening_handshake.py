@@ -70,20 +70,26 @@ def assert_headers_match(actual_headers, expected_list):
 
     assert actual_list == expected_list
 
-def make_request(agent, method='GET', key=UPGRADE_KEY, version='13'):
+def make_request(agent, method='GET', key=UPGRADE_KEY, version='13',
+                 protocol=None):
     """
     Performs a WebSocket handshake using Agent#request. Returns whatever
     Agent#request returns (which is a Deferred that should be waited on for the
     server response).
     """
+    hdrs = {
+        "Upgrade": ["websocket"],
+        "Connection": ["Upgrade"],
+        "Sec-WebSocket-Key": [key],
+        "Sec-WebSocket-Version": [version],
+    }
+
+    if protocol is not None:
+        hdrs["Sec-WebSocket-Protocol"] = [protocol]
+
     return agent.request(method,
                          HOST + '/echo',
-                         Headers({
-                             "Upgrade": ["websocket"],
-                             "Connection": ["Upgrade"],
-                             "Sec-WebSocket-Key": [key],
-                             "Sec-WebSocket-Version": [version],
-                         }),
+                         Headers(hdrs),
                          None)
 
 #
@@ -139,6 +145,17 @@ def bad_key_response(agent, request):
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
+@pytest.yield_fixture(params=["", " ", "\t", ",", ",,", "bad token","\"token\"",
+                              "bad/token", "bad\\token", "valid, invalid{}"])
+def bad_protocol_response(agent, request):
+    """
+    A fixture that performs a bad handshake with an invalid
+    Sec-WebSocket-Protocol header.
+    """
+    response = pytest.blockon(make_request(agent, protocol=request.param))
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
 #
 # Tests
 #
@@ -161,3 +178,6 @@ def test_handshake_is_refused_for_unsupported_versions(unsupported_version_respo
 
 def test_handshake_is_refused_for_bad_key(bad_key_response):
     assert bad_key_response.code == 400
+
+def test_handshake_is_refused_for_bad_subprotocols(bad_protocol_response):
+    assert bad_protocol_response.code == 400
