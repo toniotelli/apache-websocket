@@ -206,7 +206,12 @@ static const char *mod_websocket_conf_handler(cmd_parms *cmd, void *confv,
             }
         }
         else {
-            response = "Could not open WebSocket handler module";
+            char err[256];
+            response = apr_pstrcat(cmd->pool,
+                                   "Could not load WebSocket plugin ", path,
+                                   ": ",
+                                   apr_dso_error(res_handle, err, sizeof(err)),
+                                   NULL);
         }
     }
     else {
