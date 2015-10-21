@@ -14,6 +14,8 @@ def agent():
     return client.Agent(reactor)
 
 @pytest.yield_fixture(params=["dumb-increment-protocol",
+                              "   dumb-increment-protocol  ,",
+                              "\tdumb-increment-protocol\t",
                               "echo, dumb-increment-protocol",
                               "dumb-increment-protocol, echo",
                               ", , dumb-increment-protocol, "])

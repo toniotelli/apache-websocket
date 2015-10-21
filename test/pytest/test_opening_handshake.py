@@ -100,7 +100,9 @@ def bad_key_response(agent, request):
     client.readBody(response).cancel() # immediately close the connection
 
 @pytest.yield_fixture(params=["", " ", "\t", ",", ",,", "bad token","\"token\"",
-                              "bad/token", "bad\\token", "valid, invalid{}"])
+                              "bad/token", "bad\\token", "valid, invalid{}",
+                              "bad; separator", "control\x05character",
+                              "bad\ttoken"])
 def bad_protocol_response(agent, request):
     """
     A fixture that performs a bad handshake with an invalid

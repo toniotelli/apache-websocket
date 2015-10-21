@@ -557,6 +557,66 @@ static void mod_websocket_handshake(request_rec *r, const char *key)
 }
 
 /*
+ * Compatibility wrapper for ap_parse_token_list_strict(), which doesn't exist
+ * until Apache 2.4.17. We remove the skip_invalid flag since we never ignore
+ * invalid separators, and we assume the tokens array is always preinitialized.
+ */
+static const char* parse_token_list_strict(apr_pool_t *p, const char *tok,
+                                           apr_array_header_t *tokens)
+{
+#if AP_MODULE_MAGIC_AT_LEAST(20120211,51)
+    return ap_parse_token_list_strict(p, tok, &tokens,
+                                      0 /* don't ignore invalid separators */);
+#else
+    /*
+     * ap_get_token() allows a bunch of stuff we don't want, so we have to
+     * perform more validity checks.
+     */
+
+    while (*tok) {
+        const char *token;
+
+        token = ap_get_token(p, &tok, 0);
+
+        /*
+         * Check that the token is valid before putting it into the array. Empty
+         * tokens are fine (we must accept them per RFC 7230); we'll just skip
+         * them.
+         */
+        if (token && *token) {
+            const char *c;
+
+            for (c = token; *c; ++c) {
+                /*
+                 * This is the T_HTTP_TOKEN_STOP check from gen_test_char.
+                 * Disallow control characters and separators in tokens.
+                 */
+                if (apr_iscntrl(*c) || strchr(" \t()<>@,;:\\\"/[]?={}", *c)) {
+                    return apr_psprintf(p, "Encountered illegal separator "
+                                        "'\\x%.2x'", (unsigned int) *c);
+                }
+            }
+
+            *((const char **) apr_array_push(tokens)) = token;
+        }
+
+        /*
+         * ap_get_token() breaks tokens on whitespace, semicolons, and commas.
+         * Make sure that we only get commas after a token.
+         */
+        if (*tok == ',') {
+            ++tok;
+        } else if (*tok) {
+            return apr_psprintf(p, "Encountered illegal separator '\\x%.2x'",
+                                (unsigned int) *tok);
+        }
+    }
+
+    return NULL;
+#endif
+}
+
+/*
  * The client-supplied WebSocket protocol entry consists of a list of
  * client-side supported protocols. Parse the list, and populate an array with
  * those protocol names.
@@ -571,9 +631,8 @@ static const char *parse_protocol(const char *sec_websocket_protocol,
         return NULL;
     }
 
-    error = ap_parse_token_list_strict(protocols->pool, sec_websocket_protocol,
-                                       &protocols,
-                                       0 /* don't ignore invalid separators */);
+    error = parse_token_list_strict(protocols->pool, sec_websocket_protocol,
+                                    protocols);
 
     if (!error && apr_is_empty_array(protocols)) {
         /* Sec-WebSocket-Protocol must contain at least one valid token. */
