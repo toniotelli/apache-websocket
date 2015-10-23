@@ -1397,6 +1397,11 @@ static int is_websocket_upgrade(request_rec *r)
     const char *connection = apr_table_get(r->headers_in, "Connection");
     int upgrade_connection = 0;
 
+    if (r->proto_num < HTTP_VERSION(1, 1)) {
+        /* Upgrade requires at least HTTP/1.1. */
+        return 0;
+    }
+
     if ((upgrade != NULL) &&
         (connection != NULL) && !strcasecmp(upgrade, "WebSocket")) {
         upgrade_connection = !strcasecmp(connection, "Upgrade");
