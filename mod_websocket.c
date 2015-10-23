@@ -1293,8 +1293,14 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
                 work_done = 1;
             }
             else if (!APR_STATUS_IS_EAGAIN(rv)) {
-                ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
-                              "trypop from outgoing queue failed");
+                /*
+                 * APR_EOF just means the client aborted the TCP connection; no
+                 * point in spamming the logs with errors in that case.
+                 */
+                int log_level = APR_STATUS_IS_EOF(rv) ? APLOG_DEBUG : APLOG_ERR;
+                ap_log_rerror(APLOG_MARK, log_level, rv, r,
+                              "nonblocking read from input brigade failed");
+
                 read_state.status_code = STATUS_CODE_INTERNAL_ERROR;
                 break;
             }
@@ -1311,14 +1317,8 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
                 work_done = 1;
             }
             else if (!APR_STATUS_IS_EAGAIN(rv)) {
-                /*
-                 * APR_EOF just means the client aborted the TCP connection; no
-                 * point in spamming the logs with errors in that case.
-                 */
-                int log_level = APR_STATUS_IS_EOF(rv) ? APLOG_DEBUG : APLOG_ERR;
-                ap_log_rerror(APLOG_MARK, log_level, rv, r,
-                              "nonblocking read from input brigade failed");
-
+                ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
+                              "trypop from outgoing queue failed");
                 read_state.status_code = STATUS_CODE_INTERNAL_ERROR;
 
                 break;
