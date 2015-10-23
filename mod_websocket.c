@@ -621,25 +621,34 @@ static const char* parse_token_list_strict(apr_pool_t *p, const char *tok,
  * client-side supported protocols. Parse the list, and populate an array with
  * those protocol names.
  */
-static const char *parse_protocol(const char *sec_websocket_protocol,
-                                  apr_array_header_t *protocols)
+static apr_status_t parse_protocol(request_rec *r,
+                                   apr_array_header_t *protocols)
 {
+    const char *sec_websocket_protocol;
     const char *error;
+
+    sec_websocket_protocol = apr_table_get(r->headers_in,
+                                           "Sec-WebSocket-Protocol");
 
     if (!sec_websocket_protocol) {
         /* A missing header means we have no requested subprotocols. */
-        return NULL;
+        return APR_SUCCESS;
     }
 
-    error = parse_token_list_strict(protocols->pool, sec_websocket_protocol,
-                                    protocols);
+    error = parse_token_list_strict(r->pool, sec_websocket_protocol, protocols);
 
     if (!error && apr_is_empty_array(protocols)) {
         /* Sec-WebSocket-Protocol must contain at least one valid token. */
-        return "Sec-WebSocket-Protocol header contains no subprotocols";
+        error = "Header contains no subprotocols";
     }
 
-    return error;
+    if (error) {
+        ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
+                      "Client sent invalid Sec-WebSocket-Protocol: %s", error);
+        return APR_EINVAL;
+    }
+
+    return APR_SUCCESS;
 }
 
 /*
@@ -1523,7 +1532,6 @@ static int mod_websocket_method_handler(request_rec *r)
 {
     const char *host;
     const char *sec_websocket_key;
-    const char *sec_websocket_protocol;
     const char *sec_websocket_version;
     apr_int64_t protocol_version;
     apr_array_header_t *protocols;
@@ -1549,8 +1557,6 @@ static int mod_websocket_method_handler(request_rec *r)
 
     host                   = apr_table_get(r->headers_in, "Host");
     sec_websocket_key      = apr_table_get(r->headers_in, "Sec-WebSocket-Key");
-    sec_websocket_protocol = apr_table_get(r->headers_in,
-                                           "Sec-WebSocket-Protocol");
     sec_websocket_version  = apr_table_get(r->headers_in,
                                            "Sec-WebSocket-Version");
     protocol_version       = parse_protocol_version(sec_websocket_version);
@@ -1564,7 +1570,7 @@ static int mod_websocket_method_handler(request_rec *r)
         !host || !r->parsed_uri.path ||
         !is_valid_key(sec_websocket_key) ||
         !is_supported_version(protocol_version) ||
-        (parse_protocol(sec_websocket_protocol, protocols) != NULL)) {
+        (parse_protocol(r, protocols) != APR_SUCCESS)) {
 
         /*
          * If the client requested an upgrade to WebSocket, but the
