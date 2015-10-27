@@ -842,6 +842,65 @@ static int is_valid_status_code(const unsigned char *buffer, size_t buffer_size,
            !(reject_reserved && is_reserved_status_code(status));
 }
 
+/*
+ * Constructs a serialized Origin string for the request URI. See RFC 6454.
+ */
+static const char *construct_request_origin(request_rec *r)
+{
+    const char *hostname = r->hostname;
+    apr_port_t port = ap_get_server_port(r);
+
+    if (ap_strchr_c(hostname, ':')) {
+        /* IPv6 hostnames need to be bracketed. */
+        hostname = apr_pstrcat(r->pool, "[", hostname, "]", NULL);
+    }
+
+    return apr_pstrcat(r->pool, ap_http_scheme(r), "://", hostname,
+                       (ap_is_default_port(port, r) ?
+                           NULL : apr_psprintf(r->pool, ":%d", port)),
+                       NULL);
+}
+
+/*
+ * Checks the origin of the incoming handshake and determines whether it's one
+ * we trust.
+ */
+static int is_trusted_origin(request_rec *r) {
+    const char *request_origin;
+    const char *origin;
+
+    /* const char *sec_websocket_origin = apr_table_get(r->headers_in, "Sec-WebSocket-Origin"); */
+    /* We need to validate the Sec-WebSocket-Origin for old versions -- FIXME */
+
+    origin = apr_table_get(r->headers_in, "Origin");
+    if (!origin) {
+        /*
+         * A request without an Origin is not made on behalf of a user by a
+         * user-agent, so we don't need to apply same-origin protection.
+         */
+        return 1;
+    }
+
+    request_origin = construct_request_origin(r);
+    if (!request_origin) {
+        return 0;
+    }
+
+    /*
+     * The origin of the request and the Origin sent by the user-agent must
+     * match exactly.
+     */
+    if (strcmp(origin, request_origin)) {
+        ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
+                      "Origin header '%s' sent by user-agent does not match "
+                      "request origin '%s'; rejecting WebSocket upgrade",
+                      origin, request_origin);
+        return 0;
+    }
+
+    return 1;
+}
+
 static void mod_websocket_handle_incoming(const WebSocketServer *server,
                                           unsigned char *block,
                                           apr_size_t block_size,
@@ -1567,10 +1626,6 @@ static int mod_websocket_method_handler(request_rec *r)
     protocol_version       = parse_protocol_version(sec_websocket_version);
     protocols              = apr_array_make(r->pool, 1, sizeof(char *));
 
-    /* const char *sec_websocket_origin = apr_table_get(r->headers_in, "Sec-WebSocket-Origin"); */
-    /* const char *origin = apr_table_get(r->headers_in, "Origin"); */
-    /* We need to validate the Host and Origin -- FIXME */
-
     if ((r->method_number != M_GET) || r->header_only ||
         !host || !r->parsed_uri.path ||
         !is_valid_key(sec_websocket_key) ||
@@ -1589,6 +1644,10 @@ static int mod_websocket_method_handler(request_rec *r)
         }
 
         return HTTP_BAD_REQUEST;
+    }
+
+    if (!is_trusted_origin(r)) {
+        return HTTP_FORBIDDEN;
     }
 
     /* Client handshake is good. Figure out which plugin we're calling. */

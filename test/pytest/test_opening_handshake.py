@@ -5,7 +5,8 @@ import urlparse
 from twisted.internet import defer, reactor
 from twisted.web import client
 
-from testutil.websocket import assert_successful_upgrade, make_request
+from testutil.websocket import assert_successful_upgrade, make_authority, \
+                               make_root, make_request, HOST, HOST_IPV6
 
 # XXX for the xxx_headerReceived monkey-patch
 from twisted.web._newclient import HTTPParser
@@ -160,6 +161,35 @@ def bad_protocol_response(agent, request):
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
+@pytest.yield_fixture(params=[HOST, HOST_IPV6])
+def good_origin_response(agent, request):
+    """
+    A fixture that performs a handshake with an Origin that matches the server.
+    """
+    host = make_authority(host=request.param)
+    origin = make_root(host=request.param)
+
+    response = pytest.blockon(make_request(agent, origin=origin, host=host))
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
+@pytest.yield_fixture(params=[
+                              ["http://not-my-origin.com", None],
+                              [make_root(port=55), None],
+                              [make_root(), make_authority(port=55)]
+                             ])
+def bad_origin_response(agent, request):
+    """
+    A fixture that performs a good handshake, but with an Origin that does not
+    match the server.
+    """
+    origin = request.param[0]
+    host = request.param[1]
+
+    response = pytest.blockon(make_request(agent, origin=origin, host=host))
+    yield response
+    client.readBody(response).cancel() # immediately close the connection
+
 #
 # Tests
 #
@@ -190,3 +220,9 @@ def test_handshake_is_refused_for_bad_subprotocols(bad_protocol_response):
 def test_HTTP_10_handshakes_are_refused(agent_10):
     response = yield make_request(agent_10)
     assert 400 <= response.code < 500
+
+def test_same_Origin_is_allowed(good_origin_response):
+    assert_successful_upgrade(good_origin_response)
+
+def test_mismatched_Origins_are_refused(bad_origin_response):
+    assert bad_origin_response.code == 403

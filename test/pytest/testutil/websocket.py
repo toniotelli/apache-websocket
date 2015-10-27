@@ -1,7 +1,11 @@
 from twisted.web.http_headers import Headers
 
-# TODO: make this configurable
-HOST = 'http://127.0.0.1'
+# TODO: make these configurable
+HOST = '127.0.0.1'
+HOST_IPV6 = '[::1]'
+
+SCHEME = "http"
+PORT = 80
 
 # from `openssl rand -base64 16`
 UPGRADE_KEY = '36zg57EA+cDLixMBxrDj4g=='
@@ -30,8 +34,19 @@ def assert_successful_upgrade(response):
     assert len(accept) == 1
     assert accept[0] == UPGRADE_ACCEPT
 
+def make_authority(scheme=SCHEME, host=HOST, port=PORT):
+    """Returns host[:port] for use in a Host header."""
+    root = host
+    if (scheme == "http" and port != 80) or (scheme == "https" and port != 443):
+        root += ":{0}".format(port)
+    return root
+
+def make_root(scheme=SCHEME, host=HOST, port=PORT):
+    """Returns scheme://host[:port] to create a root URL for testing."""
+    return scheme + "://" + make_authority(scheme, host, port)
+
 def make_request(agent, method='GET', path='/echo', key=UPGRADE_KEY,
-                 version='13', protocol=None):
+                 version='13', protocol=None, origin=None, host=None):
     """
     Performs a WebSocket handshake using Agent#request. Returns whatever
     Agent#request returns (which is a Deferred that should be waited on for the
@@ -47,7 +62,13 @@ def make_request(agent, method='GET', path='/echo', key=UPGRADE_KEY,
     if protocol is not None:
         hdrs["Sec-WebSocket-Protocol"] = [protocol]
 
+    if origin is not None:
+        hdrs["Origin"] = [origin]
+
+    if host is not None:
+        hdrs["Host"] = [host]
+
     return agent.request(method,
-                         HOST + path,
+                         make_root() + path,
                          Headers(hdrs),
                          None)
