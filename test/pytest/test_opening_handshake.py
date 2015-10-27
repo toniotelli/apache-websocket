@@ -2,9 +2,10 @@ import pytest
 import re
 import urlparse
 
-from twisted.internet import defer, reactor
+from twisted.internet import reactor
 from twisted.web import client
 
+from testutil.fixtures import agent
 from testutil.websocket import assert_successful_upgrade, make_authority, \
                                make_root, make_request, HOST, HOST_IPV6
 
@@ -94,10 +95,6 @@ class HTTP10Agent:
 #
 # Fixtures
 #
-
-@pytest.fixture
-def agent():
-    return client.Agent(reactor)
 
 @pytest.fixture
 def agent_10():

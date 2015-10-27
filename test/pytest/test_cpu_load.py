@@ -1,9 +1,9 @@
 import psutil
 import pytest
 
-from twisted.internet import reactor
 from twisted.web import client
 
+from testutil.fixtures import agent
 from testutil.websocket import make_request
 
 # The maximum CPU usage we consider acceptable.
@@ -22,14 +22,6 @@ def any_cpus_railed():
            return True
 
    return False
-
-#
-# Fixtures
-#
-
-@pytest.fixture
-def agent():
-    return client.Agent(reactor)
 
 #
 # Tests

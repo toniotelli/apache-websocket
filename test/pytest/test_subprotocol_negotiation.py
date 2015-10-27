@@ -1,17 +1,13 @@
 import pytest
 
-from twisted.internet import reactor
 from twisted.web import client
 
+from testutil.fixtures import agent
 from testutil.websocket import assert_successful_upgrade, make_request
 
 #
 # Fixtures
 #
-
-@pytest.fixture
-def agent():
-    return client.Agent(reactor)
 
 @pytest.yield_fixture(params=["dumb-increment-protocol",
                               "   dumb-increment-protocol  ,",

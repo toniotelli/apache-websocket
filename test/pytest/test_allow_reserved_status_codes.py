@@ -1,7 +1,7 @@
 import autobahn.twisted.websocket as ws
 import pytest
 
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 
 CLOSE_CODE_PROTOCOL_ERROR = 1002
 
