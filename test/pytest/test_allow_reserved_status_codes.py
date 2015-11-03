@@ -3,7 +3,11 @@ import pytest
 
 from twisted.internet import defer
 
+from testutil.websocket import make_root
+
 CLOSE_CODE_PROTOCOL_ERROR = 1002
+
+ROOT = make_root("ws")
 
 #
 # Autobahn Subclasses
@@ -86,13 +90,13 @@ def connect(uri):
 def default_proto():
     """A fixture that returns a WebSocket protocol connection to an endpoint
     that has no WebSocketAllowReservedStatusCodes directive."""
-    return connect("ws://127.0.0.1/echo")
+    return connect(ROOT + "/echo")
 
 @pytest.fixture
 def allow_proto():
     """A fixture that returns a WebSocket protocol connection to an endpoint
     that has WebSocketAllowReservedStatusCodes enabled."""
-    return connect("ws://127.0.0.1/echo-allow-reserved")
+    return connect(ROOT + "/echo-allow-reserved")
 
 #
 # Tests
