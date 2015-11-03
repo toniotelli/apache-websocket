@@ -3,11 +3,11 @@ import pytest
 
 from twisted.internet import defer
 
-from testutil.websocket import make_root
+from testutil.websocket import make_root, SCHEME
 
 CLOSE_CODE_PROTOCOL_ERROR = 1002
 
-ROOT = make_root("ws")
+ROOT = make_root("wss" if (SCHEME == "https") else "ws")
 
 #
 # Autobahn Subclasses
