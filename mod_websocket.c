@@ -67,7 +67,12 @@ typedef struct
     WebSocketPlugin *plugin;
     apr_int64_t payload_limit;
     int allow_reserved; /* whether to allow reserved status codes */
+    int origin_check;   /* how to check the Origin during a handshake */
 } websocket_config_rec;
+
+/* Possible config values for websocket_config_rec->origin_check */
+#define ORIGIN_CHECK_OFF  0 /* No checks whatsoever */
+#define ORIGIN_CHECK_SAME 1 /* Origin must match that of the request target */
 
 #define BLOCK_DATA_SIZE              4096
 
@@ -131,6 +136,7 @@ static void *mod_websocket_create_dir_config(apr_pool_t *p, char *path)
         if (conf != NULL) {
             conf->location = apr_pstrdup(p, path);
             conf->payload_limit = 32 * 1024 * 1024;
+            conf->origin_check = ORIGIN_CHECK_SAME;
         }
     }
     return (void *)conf;
@@ -218,6 +224,24 @@ static const char *mod_websocket_conf_handler(cmd_parms *cmd, void *confv,
         response = "Invalid parameters";
     }
     return response;
+}
+
+static const char *mod_websocket_conf_origin_check(cmd_parms *cmd, void *confv,
+                                                   const char *mode)
+{
+    websocket_config_rec *conf = (websocket_config_rec *)confv;
+
+    if (conf) {
+        if (!strcasecmp(mode, "Off")) {
+            conf->origin_check = ORIGIN_CHECK_OFF;
+        } else if (!strcasecmp(mode, "Same")) {
+            conf->origin_check = ORIGIN_CHECK_SAME;
+        } else {
+            return "WebSocketOriginCheck must be either Off or Same";
+        }
+    }
+
+    return NULL;
 }
 
 static const char *mod_websocket_conf_max_message_size(cmd_parms *cmd,
@@ -865,9 +889,14 @@ static const char *construct_request_origin(request_rec *r)
  * Checks the origin of the incoming handshake and determines whether it's one
  * we trust.
  */
-static int is_trusted_origin(request_rec *r) {
+static int is_trusted_origin(request_rec *r, int mode) {
     const char *request_origin;
     const char *origin;
+
+    if (mode == ORIGIN_CHECK_OFF) {
+        /* No checks; trust everything. */
+        return 1;
+    }
 
     /* const char *sec_websocket_origin = apr_table_get(r->headers_in, "Sec-WebSocket-Origin"); */
     /* We need to validate the Sec-WebSocket-Origin for old versions -- FIXME */
@@ -1646,10 +1675,6 @@ static int mod_websocket_method_handler(request_rec *r)
         return HTTP_BAD_REQUEST;
     }
 
-    if (!is_trusted_origin(r)) {
-        return HTTP_FORBIDDEN;
-    }
-
     /* Client handshake is good. Figure out which plugin we're calling. */
     conf = (websocket_config_rec *) ap_get_module_config(r->per_dir_config,
                                                          &websocket_module);
@@ -1660,6 +1685,11 @@ static int mod_websocket_method_handler(request_rec *r)
                       "you forget to define a WebSocketHandler?)",
                       r->parsed_uri.path);
         return HTTP_INTERNAL_SERVER_ERROR;
+    }
+
+    /* Make sure the Origin sent by the client is good enough for us. */
+    if (!is_trusted_origin(r, conf->origin_check)) {
+        return HTTP_FORBIDDEN;
     }
 
     /*
@@ -1697,6 +1727,9 @@ static const command_rec websocket_cmds[] = {
     AP_INIT_TAKE2("WebSocketHandler", mod_websocket_conf_handler, NULL,
                   OR_AUTHCFG,
                   "Shared library containing WebSocket implementation followed by function initialization function name"),
+    AP_INIT_TAKE1("WebSocketOriginCheck", mod_websocket_conf_origin_check, NULL,
+                  OR_AUTHCFG,
+                  "Specifies whether (and how) the Origin header should be checked during the opening handshake (Off|Same). Defaults to Same."),
     AP_INIT_TAKE1("MaxMessageSize", mod_websocket_conf_max_message_size, NULL,
                   OR_AUTHCFG,
                   "Maximum size (in bytes) of a message to accept; default is 33554432 bytes (32 MB)"),
