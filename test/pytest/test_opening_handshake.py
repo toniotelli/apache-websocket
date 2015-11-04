@@ -110,22 +110,31 @@ def bad_protocol_response(agent, request):
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
-@pytest.yield_fixture(params=[HOST, HOST_IPV6])
+@pytest.yield_fixture(params=[
+                              [HOST, None],
+                              [HOST_IPV6, None],
+                              [HOST, '7'],
+                              [HOST, '8']
+                             ])
 def good_origin_response(agent, request):
     """
     A fixture that performs a handshake with an Origin that matches the server.
     """
-    host = make_authority(host=request.param)
-    origin = make_root(host=request.param)
+    host = make_authority(host=request.param[0])
+    origin = make_root(host=request.param[0])
+    version = request.param[1]
 
-    response = pytest.blockon(make_request(agent, origin=origin, host=host))
+    response = pytest.blockon(make_request(agent, origin=origin, host=host,
+                                           version=version))
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
 @pytest.yield_fixture(params=[
-                              ["http://not-my-origin.com", None],
-                              [make_root(port=55), None],
-                              [make_root(), make_authority(port=55)]
+                              ["http://not-my-origin.com", None, None],
+                              ["http://not-my-origin.com", None, '7'],
+                              ["http://not-my-origin.com", None, '8'],
+                              [make_root(port=55), None, None],
+                              [make_root(), make_authority(port=55), None]
                              ])
 def bad_origin_response(agent, request):
     """
@@ -134,8 +143,10 @@ def bad_origin_response(agent, request):
     """
     origin = request.param[0]
     host = request.param[1]
+    version = request.param[2]
 
-    response = pytest.blockon(make_request(agent, origin=origin, host=host))
+    response = pytest.blockon(make_request(agent, origin=origin, host=host,
+                                           version=version))
     yield response
     client.readBody(response).cancel() # immediately close the connection
 

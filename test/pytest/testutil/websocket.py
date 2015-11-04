@@ -46,12 +46,15 @@ def make_root(scheme=SCHEME, host=HOST, port=PORT):
     return scheme + "://" + make_authority(scheme, host, port)
 
 def make_request(agent, method='GET', path='/echo', key=UPGRADE_KEY,
-                 version='13', protocol=None, origin=None, host=None):
+                 version=None, protocol=None, origin=None, host=None):
     """
     Performs a WebSocket handshake using Agent#request. Returns whatever
     Agent#request returns (which is a Deferred that should be waited on for the
     server response).
     """
+    if version is None:
+        version = '13'
+
     hdrs = {
         "Upgrade": ["websocket"],
         "Connection": ["Upgrade"],
@@ -63,7 +66,10 @@ def make_request(agent, method='GET', path='/echo', key=UPGRADE_KEY,
         hdrs["Sec-WebSocket-Protocol"] = [protocol]
 
     if origin is not None:
-        hdrs["Origin"] = [origin]
+        if int(version) < 8:
+            hdrs["Sec-WebSocket-Origin"] = [origin]
+        else:
+            hdrs["Origin"] = [origin]
 
     if host is not None:
         hdrs["Host"] = [host]

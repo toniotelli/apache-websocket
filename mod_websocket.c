@@ -889,7 +889,7 @@ static const char *construct_request_origin(request_rec *r)
  * Checks the origin of the incoming handshake and determines whether it's one
  * we trust.
  */
-static int is_trusted_origin(request_rec *r, int mode) {
+static int is_trusted_origin(request_rec *r, int mode, apr_int64_t version) {
     const char *request_origin;
     const char *origin;
 
@@ -898,10 +898,13 @@ static int is_trusted_origin(request_rec *r, int mode) {
         return 1;
     }
 
-    /* const char *sec_websocket_origin = apr_table_get(r->headers_in, "Sec-WebSocket-Origin"); */
-    /* We need to validate the Sec-WebSocket-Origin for old versions -- FIXME */
+    /*
+     * Versions 8 (HyBi draft 12) and 13 use the Origin header; protocol 7 uses
+     * Sec-WebSocket-Origin.
+     */
+    origin = apr_table_get(r->headers_in, (version < 8) ? "Sec-WebSocket-Origin"
+                                                        : "Origin");
 
-    origin = apr_table_get(r->headers_in, "Origin");
     if (!origin) {
         /*
          * A request without an Origin is not made on behalf of a user by a
@@ -1688,7 +1691,7 @@ static int mod_websocket_method_handler(request_rec *r)
     }
 
     /* Make sure the Origin sent by the client is good enough for us. */
-    if (!is_trusted_origin(r, conf->origin_check)) {
+    if (!is_trusted_origin(r, conf->origin_check, protocol_version)) {
         return HTTP_FORBIDDEN;
     }
 
