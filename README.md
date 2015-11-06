@@ -127,19 +127,6 @@ server will initialize the module by calling the `echo_init` function in
       </Location>
     </IfModule>
 
-Since we are dealing with messages, not streams, we need to specify a maximum
-message size. The default size is 32 megabytes. You may override this value by
-specifying a `MaxMessageSize` configuration setting. Here is an example of how
-to set the maximum message size is set to 64 megabytes:
-
-    <IfModule mod_websocket.c>
-      <Location /echo>
-        SetHandler websocket-handler
-        WebSocketHandler /usr/lib/apache2/modules/mod_websocket_echo.so echo_init
-        MaxMessageSize 67108864
-      </Location>
-    </IfModule>
-
 Under Linux, the module-specific configuration may be contained in a single
 file called `/etc/apache2/mods-available/websocket.load` (your version of Linux
 may vary). If you did not use `apxs2` with the `-a` option to initially
@@ -172,6 +159,23 @@ is using the `__stdcall` calling convention:
         WebSocketHandler modules/mod_websocket_echo.so _echo_init@0
       </Location>
     </IfModule>
+
+### `MaxMessageSize`
+
+Since we are dealing with messages, not streams, we need to specify a maximum
+message size. The default size is 32 megabytes. You may override this value by
+specifying a `MaxMessageSize` configuration setting. Here is an example of how
+to set the maximum message size is set to 64 megabytes:
+
+    <IfModule mod_websocket.c>
+      <Location /echo>
+        SetHandler websocket-handler
+        WebSocketHandler /usr/lib/apache2/modules/mod_websocket_echo.so echo_init
+        MaxMessageSize 67108864
+      </Location>
+    </IfModule>
+
+### `WebSocketAllowReservedStatusCodes`
 
 By default, the module will reject close frame status codes in the official
 range (1000-2999) that are undefined/reserved for future use. You may use
