@@ -68,11 +68,13 @@ typedef struct
     apr_int64_t payload_limit;
     int allow_reserved; /* whether to allow reserved status codes */
     int origin_check;   /* how to check the Origin during a handshake */
+    apr_hash_t *trusted_origins; /* whitelist for ORIGIN_CHECK_TRUSTED */
 } websocket_config_rec;
 
 /* Possible config values for websocket_config_rec->origin_check */
-#define ORIGIN_CHECK_OFF  0 /* No checks whatsoever */
-#define ORIGIN_CHECK_SAME 1 /* Origin must match that of the request target */
+#define ORIGIN_CHECK_OFF     0 /* No checks whatsoever */
+#define ORIGIN_CHECK_SAME    1 /* Origin must match that of the request target */
+#define ORIGIN_CHECK_TRUSTED 2 /* Origin must be on the WebSocketTrustedOrigin list */
 
 #define BLOCK_DATA_SIZE              4096
 
@@ -137,6 +139,7 @@ static void *mod_websocket_create_dir_config(apr_pool_t *p, char *path)
             conf->location = apr_pstrdup(p, path);
             conf->payload_limit = 32 * 1024 * 1024;
             conf->origin_check = ORIGIN_CHECK_SAME;
+            conf->trusted_origins = apr_hash_make(p);
         }
     }
     return (void *)conf;
@@ -236,9 +239,29 @@ static const char *mod_websocket_conf_origin_check(cmd_parms *cmd, void *confv,
             conf->origin_check = ORIGIN_CHECK_OFF;
         } else if (!strcasecmp(mode, "Same")) {
             conf->origin_check = ORIGIN_CHECK_SAME;
+        } else if (!strcasecmp(mode, "Trusted")) {
+            conf->origin_check = ORIGIN_CHECK_TRUSTED;
         } else {
-            return "WebSocketOriginCheck must be either Off or Same";
+            return "WebSocketOriginCheck must be Off, Same, or Trusted";
         }
+    }
+
+    return NULL;
+}
+
+static const char *mod_websocket_conf_add_origin(cmd_parms *cmd, void *confv,
+                                                 const char *arg)
+{
+    websocket_config_rec *conf = (websocket_config_rec *)confv;
+
+    if (conf) {
+        const char *origin = apr_pstrdup(cmd->pool, arg);
+        apr_hash_set(conf->trusted_origins, origin, APR_HASH_KEY_STRING,
+                     origin);
+
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, cmd->server,
+                     "added Origin '%s' to the Trusted whitelist for %s",
+                     origin, (cmd->path ? cmd->path : "null"));
     }
 
     return NULL;
@@ -889,9 +912,11 @@ static const char *construct_request_origin(request_rec *r)
  * Checks the origin of the incoming handshake and determines whether it's one
  * we trust.
  */
-static int is_trusted_origin(request_rec *r, int mode, apr_int64_t version) {
+static int is_trusted_origin(request_rec *r, websocket_config_rec *conf,
+                             apr_int64_t version) {
     const char *request_origin;
     const char *origin;
+    int mode = conf->origin_check;
 
     if (mode == ORIGIN_CHECK_OFF) {
         /* No checks; trust everything. */
@@ -913,24 +938,46 @@ static int is_trusted_origin(request_rec *r, int mode, apr_int64_t version) {
         return 1;
     }
 
-    request_origin = construct_request_origin(r);
-    if (!request_origin) {
-        return 0;
+    if (mode == ORIGIN_CHECK_SAME) {
+        /*
+         * The origin of the request and the Origin sent by the user-agent must
+         * match exactly.
+         */
+        request_origin = construct_request_origin(r);
+        if (!request_origin) {
+            return 0;
+        }
+
+        if (strcmp(origin, request_origin)) {
+            ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
+                          "Origin header '%s' sent by user-agent does not match "
+                          "request origin '%s'; rejecting WebSocket upgrade",
+                          origin, request_origin);
+            return 0;
+        }
+
+        return 1;
+    } else if (mode == ORIGIN_CHECK_TRUSTED) {
+        /*
+         * See if the Origin is in our whitelist.
+         */
+        void *val = apr_hash_get(conf->trusted_origins, origin,
+                                 APR_HASH_KEY_STRING);
+
+        if (!val) {
+            ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
+                          "Origin header '%s' sent by user-agent is not in the "
+                          "Trusted whitelist; rejecting WebSocket upgrade",
+                          origin);
+            return 0;
+        }
+
+        return 1;
     }
 
-    /*
-     * The origin of the request and the Origin sent by the user-agent must
-     * match exactly.
-     */
-    if (strcmp(origin, request_origin)) {
-        ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
-                      "Origin header '%s' sent by user-agent does not match "
-                      "request origin '%s'; rejecting WebSocket upgrade",
-                      origin, request_origin);
-        return 0;
-    }
-
-    return 1;
+    ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
+                  "conf->origin_check is somehow an unexpected value");
+    return 0;
 }
 
 static void mod_websocket_handle_incoming(const WebSocketServer *server,
@@ -1691,7 +1738,7 @@ static int mod_websocket_method_handler(request_rec *r)
     }
 
     /* Make sure the Origin sent by the client is good enough for us. */
-    if (!is_trusted_origin(r, conf->origin_check, protocol_version)) {
+    if (!is_trusted_origin(r, conf, protocol_version)) {
         return HTTP_FORBIDDEN;
     }
 
@@ -1732,7 +1779,10 @@ static const command_rec websocket_cmds[] = {
                   "Shared library containing WebSocket implementation followed by function initialization function name"),
     AP_INIT_TAKE1("WebSocketOriginCheck", mod_websocket_conf_origin_check, NULL,
                   OR_AUTHCFG,
-                  "Specifies whether (and how) the Origin header should be checked during the opening handshake (Off|Same). Defaults to Same."),
+                  "Specifies whether (and how) the Origin header should be checked during the opening handshake (Off|Same|Trusted). Defaults to Same."),
+    AP_INIT_ITERATE("WebSocketTrustedOrigin", mod_websocket_conf_add_origin,
+                    NULL, OR_AUTHCFG,
+                    "Specifies one or more trusted Origins that are accepted during the opening handshake"),
     AP_INIT_TAKE1("MaxMessageSize", mod_websocket_conf_max_message_size, NULL,
                   OR_AUTHCFG,
                   "Maximum size (in bytes) of a message to accept; default is 33554432 bytes (32 MB)"),
