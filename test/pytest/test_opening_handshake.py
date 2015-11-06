@@ -6,7 +6,7 @@ from twisted.web import client
 
 from testutil.fixtures import agent, agent_10
 from testutil.websocket import assert_successful_upgrade, make_authority, \
-                               make_root, make_request, HOST, HOST_IPV6
+                               make_root, make_request, HOST, HOST_IPV6, SCHEME
 
 # XXX for the xxx_headerReceived monkey-patch
 from twisted.web._newclient import HTTPParser
@@ -129,11 +129,15 @@ def good_origin_response(agent, request):
     yield response
     client.readBody(response).cancel() # immediately close the connection
 
+# For use in the mismatched Origin tests.
+OPPOSITE_SCHEME = 'https' if (SCHEME == 'http') else 'http'
+
 @pytest.yield_fixture(params=[
                               ["http://not-my-origin.com", None, None],
                               ["http://not-my-origin.com", None, '7'],
                               ["http://not-my-origin.com", None, '8'],
                               [make_root(port=55), None, None],
+                              [OPPOSITE_SCHEME + "://" + make_authority(), None, None],
                               [make_root(), make_authority(port=55), None]
                              ])
 def bad_origin_response(agent, request):
