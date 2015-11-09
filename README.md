@@ -175,6 +175,85 @@ to set the maximum message size is set to 64 megabytes:
       </Location>
     </IfModule>
 
+### `WebSocketOriginCheck`
+
+The WebSocket protocol includes protection against cross-site request forgeries
+-- CRSF, occasionally referred to as CSWSH (Cross-Site WebSocket Hijacking) in
+this context -- with its use of [the `Origin`
+header](https://tools.ietf.org/html/rfc6454). The `Origin` header allows a
+conforming user-agent to tell the server where a WebSocket connection is
+originating from, so that the server may use this information to accept or
+reject the incoming connection. This check prevents a malicious third-party
+website from connecting to your WebSocket plugin using your users' credentials,
+but it requires the server to know which origins are trusted.
+
+The `WebSocketOriginCheck` directive controls how the server applies this
+security feature. The three options are `Same`, which requires the `Origin` sent
+by the user-agent to exactly match the origin of your WebSocket service;
+`Trusted`, which checks the incoming `Origin` against a whitelist that you
+provide; and `Off`, which disables cross-origin protection entirely. The default
+is `Same`.
+
+_Note that in all cases, handshakes without an `Origin` header are allowed to
+connect._
+
+#### Same-Origin
+
+Same-origin protection is the default mode; you can explicitly enable it using
+
+    WebSocketOriginCheck Same
+
+In effect, this checks that the `Origin` sent by the client has the same
+scheme, hostname, and port number that are currently in use by the server.  If
+_any_ of those three items differ, the handshake will be rejected. The result is
+that Javascript served from the same server as your WebSocket plugin will be
+able to connect, and everyone else will be blocked.
+
+Some caveats:
+* Same-origin mode will reject cross-scheme connections (http-to-wss and
+  https-to-ws). This is probably what most users want, since allowing an
+  unsecured HTTP resource to connect to a `wss://` service is a potential
+  vulnerability for that service, and connecting to a `ws://` service from an
+  HTTPS-secured page doesn't make a lot of sense. If your use case requires
+  cross-scheme access, you must use `Trusted` mode instead.
+* The origin of your WebSocket service URI is only strictly defined if your
+  Apache configuration has a strictly defined `VirtualHost`. Put another way, if
+  your service is hosted from a wildcard or "default" VirtualHost, it's possible
+  that your service's origin will be partially defined by the handshake's `Host`
+  header or by its request target -- both of which are controlled by the
+  user-agent, not the server. In most cases this shouldn't be a problem, since
+  malicious third parties should have no control over a user-agent's `Host`
+  header and shouldn't be able to direct requests to an incorrect hostname. But
+  if you'd prefer a more paranoid approach, switch to `Trusted` mode to
+  explicitly list the origins that your plugin should respond to.
+
+#### Trusted Origins
+
+To specify a whitelist of origins that your plugin will accept connections from,
+use `WebSocketOriginCheck Trusted` and the `WebSocketTrustedOrigin` directive:
+
+    WebSocketOriginCheck Trusted
+    WebSocketTrustedOrigin https://www.example.com https://other.example.com
+    WebSocketTrustedOrigin http://other.example.net:8080
+
+If your WebSocket plugin can be accessed via multiple hostname aliases or ports,
+each combination must be added as a separate entry, since the `Origin` value
+sent by a user-agent must _exactly_ match one in the whitelist to be allowed.
+
+#### Disabling Origin Checks
+
+The directive
+
+    WebSocketOriginCheck Off
+
+will completely disable checks on the `Origin` header and allow connections
+through a user-agent from any website. As a general rule, this should only be
+done if your WebSocket plugin provides a global service to anonymous users, and
+those users have no reason to care if third parties can connect to that service
+on their behalf. Otherwise, use of this directive opens your users to [hijacking
+attacks](https://www.notsosecure.com/2014/11/27/how-cross-site-websocket-hijacking-could-lead-to-full-session-compromise/).
+You have been warned.
+
 ### `WebSocketAllowReservedStatusCodes`
 
 By default, the module will reject close frame status codes in the official
