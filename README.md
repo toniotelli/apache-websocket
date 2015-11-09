@@ -177,8 +177,8 @@ to set the maximum message size is set to 64 megabytes:
 
 ### `WebSocketOriginCheck`
 
-The WebSocket protocol includes protection against cross-site request forgeries
--- CRSF, occasionally referred to as CSWSH (Cross-Site WebSocket Hijacking) in
+The WebSocket protocol includes protection against cross-site request forgeries,
+or CSRF -- occasionally referred to as CSWSH (Cross-Site WebSocket Hijacking) in
 this context -- with its use of [the `Origin`
 header](https://tools.ietf.org/html/rfc6454). The `Origin` header allows a
 conforming user-agent to tell the server where a WebSocket connection is
