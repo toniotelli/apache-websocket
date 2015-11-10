@@ -12,6 +12,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * This file has been modified from its original upstream version. It is
+ * forked from commit cfaef071 of the (now abandoned) repository at
+ *
+ *     https://github.com/disconnect/apache-websocket
  */
 
 /*                       _                _                     _         _
