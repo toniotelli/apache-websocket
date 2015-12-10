@@ -65,6 +65,9 @@ APLOG_USE_MODULE(websocket);
 #define APLOG_TRACE1 APLOG_DEBUG
 #endif
 
+/**
+ * Apache config file settings.
+ */
 typedef struct
 {
     char *location;
@@ -115,6 +118,7 @@ typedef struct
 
 #define WEBSOCKET_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 #define WEBSOCKET_GUID_LEN 36
+#define WEBSOCKET_PROTOCOL "websocket"
 
 #define STATUS_CODE_OK                1000
 #define STATUS_CODE_GOING_AWAY        1001
@@ -296,7 +300,7 @@ static const char *mod_websocket_conf_max_message_size(cmd_parms *cmd,
 }
 
 /*
- * Functions available to plugins.
+ * Per-connection state.
  */
 
 typedef struct _WebSocketState
@@ -311,7 +315,30 @@ typedef struct _WebSocketState
     apr_int64_t protocol_version;
     apr_pollset_t *pollset;
     apr_queue_t *queue;
+    void *plugin_private;
 } WebSocketState;
+
+static WebSocketState *create_state(request_rec *r)
+{
+    WebSocketState *state = apr_pcalloc(r->pool, sizeof(*state));
+
+    /*
+     * Note that allocated mutexes/condvars are cleaned up automatically during
+     * pool destruction.
+     */
+    apr_thread_mutex_create(&state->mutex,
+                            APR_THREAD_MUTEX_DEFAULT,
+                            r->pool);
+    apr_thread_cond_create(&state->cond, r->pool);
+
+    state->r = r;
+
+    return state;
+}
+
+/*
+ * Functions available to plugins.
+ */
 
 static request_rec *CALLBACK mod_websocket_request(const WebSocketServer *server)
 {
@@ -553,6 +580,25 @@ static void CALLBACK mod_websocket_plugin_close(const WebSocketServer *
         /* Send closing handshake */
         mod_websocket_plugin_send(server, MESSAGE_TYPE_CLOSE, NULL, 0);
     }
+}
+
+/**
+ * Constructs a server struct (which is passed to every plugin callback)
+ * that wraps the given per-connection state.
+ */
+static WebSocketServer create_server_for_state(WebSocketState *state)
+{
+    WebSocketServer server = {
+        sizeof(WebSocketServer), 1, state,
+        mod_websocket_request, mod_websocket_header_get,
+        mod_websocket_header_set,
+        mod_websocket_protocol_count,
+        mod_websocket_protocol_index,
+        mod_websocket_protocol_set,
+        mod_websocket_plugin_send, mod_websocket_plugin_close
+    };
+
+    return server;
 }
 
 /*
@@ -1532,167 +1578,66 @@ static void mod_websocket_data_framing(const WebSocketServer *server,
 }
 
 /*
- * Checks to see if the client is asking for a WebSocket upgrade.
+ * Performs a case-insensitive search through offers for the proposal string.
+ * Any matching string will be returned through the proposal parameter.
  */
-static int is_websocket_upgrade(request_rec *r)
+static int find_protocol(const apr_array_header_t *offers,
+                         const char **proposal)
 {
-    const char *upgrade = apr_table_get(r->headers_in, "Upgrade");
-    const char *connection = apr_table_get(r->headers_in, "Connection");
-    int upgrade_connection = 0;
+    int i;
 
-    if (r->proto_num < HTTP_VERSION(1, 1)) {
-        /* Upgrade requires at least HTTP/1.1. */
-        return 0;
-    }
-
-    if ((upgrade != NULL) &&
-        (connection != NULL) && !strcasecmp(upgrade, "WebSocket")) {
-        upgrade_connection = !strcasecmp(connection, "Upgrade");
-        if (!upgrade_connection) {
-            char *token = ap_get_token(r->pool, &connection, 0);
-
-            while (token && *token) {       /* Parse the Connection value */
-                upgrade_connection = !strcasecmp(token, "Upgrade");
-                if (upgrade_connection) {
-                    break;
-                }
-                while (*connection == ';') {
-                    ++connection;
-                    ap_get_token(r->pool, &connection, 0);  /* Skip parameters */
-                }
-                if (*connection++ != ',') {
-                    break;  /* Invalid without comma */
-                }
-                token =
-                    (*connection) ? ap_get_token(r->pool, &connection,
-                                                 0) : NULL;
-            }
+    for (i = 0; i < offers->nelts; ++i) {
+        const char *p = APR_ARRAY_IDX(offers, i, const char*);
+        if (!strcasecmp(p, *proposal)) {
+            *proposal = p;
+            return 1;
         }
     }
 
-    return upgrade_connection;
+    return 0;
 }
 
-/*
- * This function creates the WebSocketState and WebSocketServer structures that
- * will be used for the entire connection, sets up the plugin that will handle
- * communication, sends the 101 to upgrade the connection, and starts the
- * framing loop.
- */
-static void handle_websocket_connection(request_rec *r,
-                                        websocket_config_rec *conf,
-                                        apr_int64_t protocol_version,
-                                        apr_array_header_t *protocols)
+static int mod_websocket_protocol_propose(conn_rec *c, request_rec *r,
+                                          server_rec *s,
+                                          const apr_array_header_t *offers,
+                                          apr_array_header_t *proposals)
 {
-    WebSocketState state = {
-        r, NULL, apr_os_thread_current(), NULL, NULL, protocols, 0,
-        protocol_version, NULL, NULL
-    };
-    WebSocketServer server = {
-        sizeof(WebSocketServer), 1, &state,
-        mod_websocket_request, mod_websocket_header_get,
-        mod_websocket_header_set,
-        mod_websocket_protocol_count,
-        mod_websocket_protocol_index,
-        mod_websocket_protocol_set,
-        mod_websocket_plugin_send, mod_websocket_plugin_close
-    };
-    void *plugin_private = NULL;
+    const char* proposal = WEBSOCKET_PROTOCOL;
 
-    apr_thread_mutex_create(&state.mutex,
-                            APR_THREAD_MUTEX_DEFAULT,
-                            r->pool);
-    apr_thread_cond_create(&state.cond, r->pool);
-
-    apr_thread_mutex_lock(state.mutex);
-
-    /*
-     * If the plugin supplies an on_connect function, it must
-     * return non-null on success
-     */
-    if ((conf->plugin->on_connect == NULL) ||
-        ((plugin_private =
-          conf->plugin->on_connect(&server)) != NULL)) {
-        /*
-         * Now that the connection has been established,
-         * disable the socket timeout
-         */
-        apr_socket_timeout_set(get_conn_socket(r->connection),
-                               -1);
-
-        /* Set response status code and status line */
-        r->status = HTTP_SWITCHING_PROTOCOLS;
-        r->status_line = ap_get_status_line(r->status);
-
-        /* Send the headers */
-        ap_send_interim_response(r, 1);
-
-        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
-                      r->connection,
-                      "established new WebSocket connection");
-
-        /* The main data framing loop */
-        mod_websocket_data_framing(&server, conf,
-                                   plugin_private);
-
-        /* Wake up any waiting plugin_sends before closing */
-        apr_thread_cond_broadcast(state.cond);
-
-        apr_thread_mutex_unlock(state.mutex);
-
-        /* Tell the plugin that we are disconnecting */
-        if (conf->plugin->on_disconnect != NULL) {
-            conf->plugin->on_disconnect(plugin_private,
-                                        &server);
-        }
-        r->connection->keepalive = AP_CONN_CLOSE;
+    if (!r) {
+        /* We only do request-level upgrades. */
+        return DECLINED;
     }
-    else {
-        apr_table_clear(r->headers_out);
-
-        /* The connection has been refused */
-        r->status = HTTP_FORBIDDEN;
-        r->status_line = ap_get_status_line(r->status);
-        r->header_only = 1;
-        r->connection->keepalive = AP_CONN_CLOSE;
-
-        ap_send_error_response(r, 0);
-
-        apr_thread_mutex_unlock(state.mutex);
-    }
-
-    /* Close the connection */
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS,
-                  r->connection, "closing client connection");
-    ap_lingering_close(r->connection);
-
-    apr_thread_cond_destroy(state.cond);
-    apr_thread_mutex_destroy(state.mutex);
-}
-
-/*
- * This is the WebSocket request handler. Since WebSocket headers are quite
- * similar to HTTP headers, we will use most of the HTTP protocol handling
- * code. The difference is that we will disable the HTTP content body handling,
- * and then process the body according to the WebSocket specification.
- */
-static int mod_websocket_method_handler(request_rec *r)
-{
-    const char *host;
-    const char *sec_websocket_key;
-    const char *sec_websocket_version;
-    apr_int64_t protocol_version;
-    apr_array_header_t *protocols;
-    websocket_config_rec *conf;
-    ap_filter_t *input_filter;
 
     if (strcmp(r->handler, "websocket-handler") || !r->headers_in) {
         /* We're not configured as a handler for this request. */
         return DECLINED;
     }
 
-    if (!is_websocket_upgrade(r)) {
-        /* Don't try to handle any non-WebSocket requests. */
+    if (!offers || find_protocol(offers, &proposal)) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+                      "proposing WebSocket for connection upgrade");
+        APR_ARRAY_PUSH(proposals, const char*) = proposal;
+        return OK;
+    }
+
+    return DECLINED;
+}
+
+static int mod_websocket_pre_protocol_switch(conn_rec *c, request_rec *r,
+                                             server_rec *s,
+                                             const char *protocol)
+{
+    const char *host;
+    const char *sec_websocket_key;
+    const char *sec_websocket_version;
+    apr_int64_t protocol_version;
+    apr_array_header_t *protocols;
+
+    websocket_config_rec *conf;
+    WebSocketState *state;
+
+    if (strcasecmp(protocol, WEBSOCKET_PROTOCOL)) {
         return DECLINED;
     }
 
@@ -1747,6 +1692,63 @@ static int mod_websocket_method_handler(request_rec *r)
         return HTTP_FORBIDDEN;
     }
 
+    /* Store per-connection state for later. */
+    state = create_state(r);
+    ap_set_module_config(r->request_config, &websocket_module, state);
+
+    state->protocol_version = protocol_version;
+    state->protocols = protocols;
+
+    /* Set the expected acceptance response headers. */
+    mod_websocket_handshake(r, sec_websocket_key);
+
+    /*
+     * At this point, it seems like we're ready to upgrade. The plugin has one
+     * last chance to abort the connection (by returning NULL from its
+     * on_connect callback).
+     *
+     * The send mutex has to be locked before calling on_connect to ensure that
+     * any threads spawned by the plugin can't write to the connection until we
+     * have upgraded. (Plugins are prohibited from calling plugin_send() or
+     * plugin_close() from their on_connect callback.)
+     */
+    apr_thread_mutex_lock(state->mutex);
+
+    if (conf->plugin->on_connect) {
+        WebSocketServer server = create_server_for_state(state);
+        state->plugin_private = conf->plugin->on_connect(&server);
+
+        if (state->plugin_private == NULL) {
+            apr_thread_mutex_unlock(state->mutex);
+            return HTTP_FORBIDDEN;
+        }
+    }
+
+    return OK;
+}
+
+/**
+ * Performs the actual switch to a WebSocket connection.
+ */
+static int mod_websocket_protocol_switch(conn_rec *c, request_rec *r,
+                                         server_rec *s, const char *protocol)
+{
+    ap_filter_t *input_filter;
+    websocket_config_rec *conf;
+    WebSocketState *state;
+    WebSocketServer server;
+
+    if (strcasecmp(protocol, WEBSOCKET_PROTOCOL)) {
+        return DECLINED;
+    }
+
+    conf = ap_get_module_config(r->per_dir_config, &websocket_module);
+    state = ap_get_module_config(r->request_config, &websocket_module);
+    server = create_server_for_state(state);
+
+    /* Store the current thread ID (plugin_send requires it). */
+    state->main_thread = apr_os_thread_current();
+
     /*
      * Since we are handling a WebSocket connection, not a standard HTTP
      * connection, remove the HTTP input filter.
@@ -1762,15 +1764,34 @@ static int mod_websocket_method_handler(request_rec *r)
         }
     }
 
-    apr_table_clear(r->headers_out);
-    apr_table_setn(r->headers_out, "Upgrade", "websocket");
-    apr_table_setn(r->headers_out, "Connection", "Upgrade");
+    /*
+     * Now that the connection has been established, disable the socket timeout
+     */
+    apr_socket_timeout_set(get_conn_socket(c), -1);
 
-    /* Set the expected acceptance response */
-    mod_websocket_handshake(r, sec_websocket_key);
+    ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, c,
+                  "established new WebSocket connection");
 
-    /* We're ready to go. Take control of the connection. */
-    handle_websocket_connection(r, conf, protocol_version, protocols);
+    /*
+     * We're ready to go. Enter the main framing loop (note that state->mutex
+     * is already locked at this point).
+     */
+    mod_websocket_data_framing(&server, conf, state->plugin_private);
+
+    /* Wake up any waiting plugin_sends before closing */
+    apr_thread_cond_broadcast(state->cond);
+    apr_thread_mutex_unlock(state->mutex);
+
+    /* Tell the plugin that we are disconnecting */
+    if (conf->plugin->on_disconnect != NULL) {
+        conf->plugin->on_disconnect(state->plugin_private, &server);
+    }
+
+    /* Close the connection */
+    c->keepalive = AP_CONN_CLOSE;
+    ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, c,
+                  "closing client connection");
+    ap_lingering_close(c);
 
     return OK;
 }
@@ -1797,9 +1818,13 @@ static const command_rec websocket_cmds[] = {
 /* Declare the handlers for other events. */
 static void mod_websocket_register_hooks(apr_pool_t *p)
 {
-    /* Register for method calls. */
-    ap_hook_handler(mod_websocket_method_handler, NULL, NULL,
-                    APR_HOOK_FIRST - 1);
+    /* Register for protocol upgrades. */
+    ap_hook_protocol_propose(mod_websocket_protocol_propose, NULL, NULL,
+                             APR_HOOK_MIDDLE);
+    ap_hook_pre_protocol_switch(mod_websocket_pre_protocol_switch, NULL, NULL,
+                                APR_HOOK_MIDDLE);
+    ap_hook_protocol_switch(mod_websocket_protocol_switch, NULL, NULL,
+                            APR_HOOK_MIDDLE);
 }
 
 module AP_MODULE_DECLARE_DATA websocket_module = {
