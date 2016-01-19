@@ -1777,6 +1777,20 @@ static int mod_websocket_method_handler(request_rec *r)
      */
     remove_input_filter_byhandle(r->input_filters, "http_in");
 
+    /*
+     * mod_reqtimeout treats the entire WebSocket connection as the request body
+     * and will kill our connection if it exceeds the body timeout. Remove it
+     * from the filter list.
+     */
+    remove_input_filter_byhandle(r->input_filters, "reqtimeout");
+
+    /*
+     * Now fix up the input filters (ap_remove_input_filter_byhandle() doesn't
+     * guarantee this for us).
+     */
+    r->input_filters = r->connection->input_filters;
+    r->proto_input_filters = r->connection->input_filters;
+
     apr_table_clear(r->headers_out);
     apr_table_setn(r->headers_out, "Upgrade", "websocket");
     apr_table_setn(r->headers_out, "Connection", "Upgrade");
