@@ -1671,6 +1671,31 @@ static void handle_websocket_connection(request_rec *r,
 }
 
 /*
+ * Compatibility wrapper for ap_remove_input_filter_byhandle(), which doesn't
+ * exist until Apache 2.4.5.
+ */
+static apr_status_t remove_input_filter_byhandle(ap_filter_t *next,
+                                                 const char *handle)
+{
+#if AP_MODULE_MAGIC_AT_LEAST(20120211,12)
+    return ap_remove_input_filter_byhandle(next, handle);
+#else
+    ap_filter_t *filter;
+
+    for (filter = next; filter != NULL; filter = filter->next) {
+        if ((filter->frec != NULL) &&
+            (filter->frec->name != NULL) &&
+            !strcasecmp(filter->frec->name, handle)) {
+            ap_remove_input_filter(filter);
+            return APR_SUCCESS;
+        }
+    }
+
+    return APR_NOTFOUND;
+#endif
+}
+
+/*
  * This is the WebSocket request handler. Since WebSocket headers are quite
  * similar to HTTP headers, we will use most of the HTTP protocol handling
  * code. The difference is that we will disable the HTTP content body handling,
@@ -1684,7 +1709,6 @@ static int mod_websocket_method_handler(request_rec *r)
     apr_int64_t protocol_version;
     apr_array_header_t *protocols;
     websocket_config_rec *conf;
-    ap_filter_t *input_filter;
 
     if (strcmp(r->handler, "websocket-handler") || !r->headers_in) {
         /* We're not configured as a handler for this request. */
@@ -1751,16 +1775,7 @@ static int mod_websocket_method_handler(request_rec *r)
      * Since we are handling a WebSocket connection, not a standard HTTP
      * connection, remove the HTTP input filter.
      */
-    for (input_filter = r->input_filters;
-         input_filter != NULL;
-         input_filter = input_filter->next) {
-        if ((input_filter->frec != NULL) &&
-            (input_filter->frec->name != NULL) &&
-            !strcasecmp(input_filter->frec->name, "http_in")) {
-            ap_remove_input_filter(input_filter);
-            break;
-        }
-    }
+    remove_input_filter_byhandle(r->input_filters, "http_in");
 
     apr_table_clear(r->headers_out);
     apr_table_setn(r->headers_out, "Upgrade", "websocket");
