@@ -12,3 +12,8 @@
 *.os
 *.slo
 *.so
+
+# Ignore GNU autotools byproducts.
+/autom4te.cache/
+/config.*
+/configure
