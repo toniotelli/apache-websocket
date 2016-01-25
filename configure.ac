@@ -34,5 +34,10 @@ AC_PATH_PROG([APACHECTL], [apachectl], [no], [$SEARCHPATH])
 AS_IF([test "x$APACHECTL" = "xno"],
       [AC_MSG_ERROR([could not find the apachectl tool])])
 
-# Finished.
+# Define the template-generated files.
+AC_CONFIG_FILES([
+  Makefile
+])
+
+# Output everything.
 AC_OUTPUT

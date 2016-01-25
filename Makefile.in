@@ -1,0 +1,32 @@
+.PHONY: install clean check start restart stop
+
+# Paths to tools (set by configure)
+APXS := @APXS@
+APACHECTL := @APACHECTL@
+
+# CFLAGS and LDFLAGS can be set during the make invocation.
+CFLAGS += -g -Wall
+LDFLAGS +=
+
+comma := ,
+APXS_CFLAGS := $(addprefix -Wc$(comma),$(CFLAGS))
+APXS_LDFLAGS := $(addprefix -Wl$(comma),$(LDFLAGS))
+
+#
+# Rules
+#
+
+mod_websocket.la: mod_websocket.c
+	$(APXS) -c $(APXS_CFLAGS) $(APXS_LDFLAGS) $<
+
+install: mod_websocket.la
+	$(APXS) -i $<
+
+clean:
+	rm -f *.lo *.la *.slo *.o
+
+check:
+	$(MAKE) -C test/ test
+
+start restart stop:
+	$(APACHECTL) $@
