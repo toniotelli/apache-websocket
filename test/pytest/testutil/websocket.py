@@ -36,9 +36,13 @@ def assert_successful_upgrade(response):
 
 def make_authority(scheme=SCHEME, host=HOST, port=PORT):
     """Returns host[:port] for use in a Host header."""
+    is_default_port = ((scheme in ["http", "ws"] and port == 80) or
+                       (scheme in ["https", "wss"] and port == 443))
     root = host
-    if (scheme == "http" and port != 80) or (scheme == "https" and port != 443):
+
+    if not is_default_port:
         root += ":{0}".format(port)
+
     return root
 
 def make_root(scheme=SCHEME, host=HOST, port=PORT):
