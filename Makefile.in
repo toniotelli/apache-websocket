@@ -1,4 +1,4 @@
-.PHONY: install clean check start restart stop
+.PHONY: install clean check start restart stop examples install-examples
 
 # Paths to tools (set by configure)
 APXS := @APXS@
@@ -8,16 +8,23 @@ APACHECTL := @APACHECTL@
 CFLAGS += -g -Wall
 LDFLAGS +=
 
+# Flags for all compilation.
 comma := ,
 APXS_CFLAGS := $(addprefix -Wc$(comma),$(CFLAGS))
 APXS_LDFLAGS := $(addprefix -Wl$(comma),$(LDFLAGS))
+
+# List of example plugins -- one for each *.c in the examples/ directory.
+EXAMPLES := $(wildcard examples/*.c)
+EXAMPLE_PLUGINS := $(patsubst %.c,%.la,$(EXAMPLES))
+EXAMPLE_NAMES := $(basename $(notdir $(EXAMPLES)))
+EXAMPLE_INSTALLS := $(addprefix install-,$(EXAMPLE_NAMES))
+.PHONY: $(EXAMPLE_INSTALLS)
 
 #
 # Rules
 #
 
-mod_websocket.la: mod_websocket.c
-	$(APXS) -c $(APXS_CFLAGS) $(APXS_LDFLAGS) $<
+all: mod_websocket.la
 
 install: mod_websocket.la
 	$(APXS) -i $<
@@ -30,3 +37,15 @@ check:
 
 start restart stop:
 	$(APACHECTL) $@
+
+examples: $(EXAMPLE_PLUGINS)
+
+install-examples: $(EXAMPLE_INSTALLS)
+
+# Note that to work around PR43033, we have to pass an -n option even though we
+# are not 'activating' the example plugins.
+$(EXAMPLE_INSTALLS): install-%: examples/%.la
+	$(APXS) -i -n unused $<
+
+%.la: %.c
+	$(APXS) -c -I. $(APXS_CFLAGS) $(APXS_LDFLAGS) $<
