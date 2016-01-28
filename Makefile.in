@@ -13,6 +13,9 @@ comma := ,
 APXS_CFLAGS := $(addprefix -Wc$(comma),$(CFLAGS))
 APXS_LDFLAGS := $(addprefix -Wl$(comma),$(LDFLAGS))
 
+# List of headers we depend on.
+HEADERS := websocket_plugin.h
+
 # List of example plugins -- one for each *.c in the examples/ directory.
 EXAMPLES := $(wildcard examples/*.c)
 EXAMPLE_PLUGINS := $(patsubst %.c,%.la,$(EXAMPLES))
@@ -24,13 +27,16 @@ EXAMPLE_INSTALLS := $(addprefix install-,$(EXAMPLE_NAMES))
 # Rules
 #
 
-all: mod_websocket.la
+all: mod_websocket.la examples
 
 install: mod_websocket.la
 	$(APXS) -i $<
 
 clean:
 	rm -f *.lo *.la *.slo *.o
+	rm -rf .libs/
+	rm -f examples/*.lo examples/*.la examples/*.slo examples/*.o
+	rm -rf examples/.libs/
 
 check:
 	$(MAKE) -C test/ test
@@ -47,5 +53,10 @@ install-examples: $(EXAMPLE_INSTALLS)
 $(EXAMPLE_INSTALLS): install-%: examples/%.la
 	$(APXS) -i -n unused $<
 
-%.la: %.c
+# The main module has an additional header dependency.
+mod_websocket.la: HEADERS += validate_utf8.h
+
+# Secondary expansion lets us modify the prerequisite HEADERS at runtime.
+.SECONDEXPANSION:
+%.la: %.c $$(HEADERS)
 	$(APXS) -c -I. $(APXS_CFLAGS) $(APXS_LDFLAGS) $<
