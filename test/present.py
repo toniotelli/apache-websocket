@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/env python
 #
 # Presents the results of an Autobahn TestSuite run in TAP format.
 #

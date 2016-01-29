@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/env python
 #
 # Aggregates a series of TAP streams into a single stream using tap.py.
 #
