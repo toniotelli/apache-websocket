@@ -5,7 +5,7 @@ HOST = '127.0.0.1'
 HOST_IPV6 = '[::1]'
 
 SCHEME = "http"
-PORT = 80
+PORT = 59153
 
 # from `openssl rand -base64 16`
 UPGRADE_KEY = '36zg57EA+cDLixMBxrDj4g=='

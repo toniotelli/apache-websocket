@@ -1,4 +1,8 @@
-.PHONY: install clean check start restart stop examples install-examples
+.PHONY: install clean check start restart stop examples install-examples \
+		test-folders test-modules start-test-server stop-test-server
+
+# Absolute path to the current directory.
+CURDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 # Paths to tools (set by configure)
 APXS := @APXS@
@@ -15,6 +19,9 @@ APXS_LDFLAGS := $(addprefix -Wl$(comma),$(LDFLAGS))
 
 # List of headers we depend on.
 HEADERS := websocket_plugin.h
+
+# Path to the installed httpd's modules directory.
+MODULES_DIR := $(shell $(APXS) -q libexecdir)
 
 # List of example plugins -- one for each *.c in the examples/ directory.
 EXAMPLES := $(wildcard examples/*.c)
@@ -39,7 +46,7 @@ clean:
 	rm -rf examples/.libs/
 
 check:
-	$(MAKE) -C test/ test
+	./runtests.sh
 
 start restart stop:
 	$(APACHECTL) $@
@@ -60,3 +67,33 @@ mod_websocket.la: HEADERS += validate_utf8.h
 .SECONDEXPANSION:
 %.la: %.c $$(HEADERS)
 	$(APXS) -c -I. $(APXS_CFLAGS) $(APXS_LDFLAGS) $<
+
+#
+# Test Rules
+#
+
+TEST_MODULEDIR := test/httpd/modules
+TEST_FOLDERS := test/httpd/logs test/httpd/htdocs $(TEST_MODULEDIR)
+
+test-folders: $(TEST_FOLDERS)
+$(TEST_FOLDERS):
+	mkdir -p $@
+
+TEST_BINARIES := mod_websocket.la $(EXAMPLE_PLUGINS)
+TEST_MODULES := $(notdir $(patsubst %.la,%.so,$(TEST_BINARIES)))
+TEST_MODULE_PATHS := $(addprefix $(TEST_MODULEDIR)/,$(TEST_MODULES))
+
+test-modules: $(TEST_MODULE_PATHS)
+
+$(TEST_MODULEDIR)/mod_websocket.so: mod_websocket.la
+	mkdir -p $(TEST_MODULEDIR)
+	libtool --silent --mode=install cp $< $(abspath $@)
+
+$(TEST_MODULEDIR)/mod_websocket_%.so: examples/mod_websocket_%.la
+	mkdir -p $(TEST_MODULEDIR)
+	libtool --silent --mode=install cp $< $(abspath $@)
+
+start-test-server: test-modules test-folders
+start-test-server stop-test-server:
+	SYSTEM_MODULES_DIR=$(MODULES_DIR) $(APACHECTL) -d "$(CURDIR)/test/httpd" \
+		-f test.conf -k $(patsubst %-test-server,%,$@)

@@ -1,4 +1,10 @@
 .cache/
+*.pyc
+
+# Ignore test artifacts.
 test-results/
 testresults.tap
-*.pyc
+
+httpd/htdocs
+httpd/logs
+httpd/modules
