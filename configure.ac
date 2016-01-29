@@ -12,6 +12,8 @@ AC_ARG_VAR([APXS], [the path to the Apache apxs@<:@2@:>@ tool])
 
 AC_ARG_VAR([APACHECTL], [the path to the apachectl tool])
 
+AC_ARG_VAR([LIBTOOL], [the path to libtool])
+
 # Sanity-check user-defined variables.
 AS_IF([test \( "x$APACHE_BINDIR" != "x" \) -a \( ! -d "$APACHE_BINDIR" \)],
       [AC_MSG_WARN([APACHE_BINDIR value $APACHE_BINDIR does not appear to be a valid directory])])
@@ -33,6 +35,10 @@ AS_IF([test "x$APXS" = "xno"],
 AC_PATH_PROG([APACHECTL], [apachectl], [no], [$SEARCHPATH])
 AS_IF([test "x$APACHECTL" = "xno"],
       [AC_MSG_ERROR([could not find the apachectl tool])])
+
+AC_PATH_PROG([LIBTOOL], [libtool], [no])
+AS_IF([test "x$LIBTOOL" = "xno"],
+      [AC_MSG_ERROR([could not find an installed libtool])])
 
 # Define the template-generated files.
 AC_CONFIG_FILES([

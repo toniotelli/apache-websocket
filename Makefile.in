@@ -7,6 +7,7 @@ CURDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 # Paths to tools (set by configure)
 APXS := @APXS@
 APACHECTL := @APACHECTL@
+LIBTOOL := @LIBTOOL@
 
 # CFLAGS and LDFLAGS can be set during the make invocation.
 CFLAGS += -g -Wall
@@ -88,7 +89,7 @@ $(TEST_MODULEDIR)/mod_websocket.so: mod_websocket.la
 $(TEST_MODULES_EXAMPLE_PATHS): $(TEST_MODULEDIR)/%.so: examples/%.la
 $(TEST_MODULES_ALL_PATHS):
 	mkdir -p $(TEST_MODULEDIR)
-	libtool --silent --mode=install cp $< $(abspath $@)
+	$(LIBTOOL) --silent --mode=install cp $< $(abspath $@)
 
 start-test-server: test-modules test-folders
 start-test-server stop-test-server:
