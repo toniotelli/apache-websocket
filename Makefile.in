@@ -17,9 +17,6 @@ comma := ,
 APXS_CFLAGS := $(addprefix -Wc$(comma),$(CFLAGS))
 APXS_LDFLAGS := $(addprefix -Wl$(comma),$(LDFLAGS))
 
-# List of headers we depend on.
-HEADERS := websocket_plugin.h
-
 # Path to the installed httpd's modules directory.
 MODULES_DIR := $(shell $(APXS) -q libexecdir)
 
@@ -61,11 +58,9 @@ $(EXAMPLE_INSTALLS): install-%: examples/%.la
 	$(APXS) -i -n unused $<
 
 # The main module has an additional header dependency.
-mod_websocket.la: HEADERS += validate_utf8.h
+mod_websocket.la: validate_utf8.h
 
-# Secondary expansion lets us modify the prerequisite HEADERS at runtime.
-.SECONDEXPANSION:
-%.la: %.c $$(HEADERS)
+%.la: %.c websocket_plugin.h
 	$(APXS) -c -I. $(APXS_CFLAGS) $(APXS_LDFLAGS) $<
 
 #
