@@ -74,17 +74,19 @@ test-folders: $(TEST_FOLDERS)
 $(TEST_FOLDERS):
 	mkdir -p $@
 
+# Every library we want to install in the test modules/ directory.
 TEST_BINARIES := mod_websocket.la $(EXAMPLE_PLUGINS)
-TEST_MODULES := $(notdir $(patsubst %.la,%.so,$(TEST_BINARIES)))
-TEST_MODULE_PATHS := $(addprefix $(TEST_MODULEDIR)/,$(TEST_MODULES))
 
-test-modules: $(TEST_MODULE_PATHS)
+TEST_MODULES_ALL := $(notdir $(patsubst %.la,%.so,$(TEST_BINARIES)))
+TEST_MODULES_ALL_PATHS := $(addprefix $(TEST_MODULEDIR)/,$(TEST_MODULES_ALL))
+TEST_MODULES_EXAMPLE := $(notdir $(patsubst %.la,%.so,$(EXAMPLE_PLUGINS)))
+TEST_MODULES_EXAMPLE_PATHS := $(addprefix $(TEST_MODULEDIR)/,$(TEST_MODULES_EXAMPLE))
+
+test-modules: $(TEST_MODULES_ALL_PATHS)
 
 $(TEST_MODULEDIR)/mod_websocket.so: mod_websocket.la
-	mkdir -p $(TEST_MODULEDIR)
-	libtool --silent --mode=install cp $< $(abspath $@)
-
-$(TEST_MODULEDIR)/mod_websocket_%.so: examples/mod_websocket_%.la
+$(TEST_MODULES_EXAMPLE_PATHS): $(TEST_MODULEDIR)/%.so: examples/%.la
+$(TEST_MODULES_ALL_PATHS):
 	mkdir -p $(TEST_MODULEDIR)
 	libtool --silent --mode=install cp $< $(abspath $@)
 
