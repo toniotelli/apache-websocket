@@ -6,11 +6,13 @@ AC_CONFIG_SRCDIR([mod_websocket.c])
 AC_ARG_VAR([APACHE_BINDIR],
            [the directory containing the binaries for your httpd installation
             (if you have a non-standard installation path, setting this value is
-            easier than setting APXS and APACHECTL separately)])
+            easier than setting APXS, APACHECTL, and HTTPD separately)])
 
 AC_ARG_VAR([APXS], [the path to the Apache apxs@<:@2@:>@ tool])
 
 AC_ARG_VAR([APACHECTL], [the path to the apachectl tool])
+
+AC_ARG_VAR([HTTPD], [the path to the httpd executable])
 
 AC_ARG_VAR([LIBTOOL], [the path to libtool])
 
@@ -24,6 +26,9 @@ AS_IF([test \( "x$APXS" != "x" \) -a \( ! -x "$APXS" \)],
 AS_IF([test \( "x$APACHECTL" != "x" \) -a \( ! -x "$APACHECTL" \)],
       [AC_MSG_WARN([APACHECTL value $APACHECTL does not appear to be an executable file])])
 
+AS_IF([test \( "x$HTTPD" != "x" \) -a \( ! -x "$HTTPD" \)],
+      [AC_MSG_WARN([HTTPD value $HTTPD does not appear to be an executable file])])
+
 # Find the programs.
 AS_IF([test "x$APACHE_BINDIR" != "x"], [SEARCHPATH=$APACHE_BINDIR:$PATH],
       [SEARCHPATH=$PATH])
@@ -35,6 +40,10 @@ AS_IF([test "x$APXS" = "xno"],
 AC_PATH_PROG([APACHECTL], [apachectl], [no], [$SEARCHPATH])
 AS_IF([test "x$APACHECTL" = "xno"],
       [AC_MSG_ERROR([could not find the apachectl tool])])
+
+AC_PATH_PROGS([HTTPD], [httpd apache2], [no], [$SEARCHPATH])
+AS_IF([test "x$HTTPD" = "xno"],
+      [AC_MSG_ERROR([could not find the Apache httpd executable])])
 
 AC_PATH_PROG([LIBTOOL], [libtool], [no])
 AS_IF([test "x$LIBTOOL" = "xno"],

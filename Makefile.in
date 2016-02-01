@@ -7,6 +7,7 @@ CURDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 # Paths to tools (set by configure)
 APXS := @APXS@
 APACHECTL := @APACHECTL@
+HTTPD := @HTTPD@
 LIBTOOL := @LIBTOOL@
 
 # CFLAGS and LDFLAGS can be set during the make invocation.
@@ -93,5 +94,5 @@ $(TEST_MODULES_ALL_PATHS):
 
 start-test-server: test-modules test-folders
 start-test-server stop-test-server:
-	SYSTEM_MODULES_DIR=$(MODULES_DIR) $(APACHECTL) -d "$(CURDIR)/test/httpd" \
+	SYSTEM_MODULES_DIR=$(MODULES_DIR) $(HTTPD) -d "$(CURDIR)/test/httpd" \
 		-f test.conf -k $(patsubst %-test-server,%,$@)
