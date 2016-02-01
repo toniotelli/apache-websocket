@@ -16,6 +16,10 @@ AC_ARG_VAR([HTTPD], [the path to the httpd executable])
 
 AC_ARG_VAR([LIBTOOL], [the path to libtool])
 
+AC_ARG_VAR([TEST_MPM], [the name of the MPM to use during testing ('event',
+                        'worker', etc.), or 'builtin' to use a statically
+                        compiled MPM])
+
 # Sanity-check user-defined variables.
 AS_IF([test \( "x$APACHE_BINDIR" != "x" \) -a \( ! -d "$APACHE_BINDIR" \)],
       [AC_MSG_WARN([APACHE_BINDIR value $APACHE_BINDIR does not appear to be a valid directory])])
@@ -55,6 +59,34 @@ system_modules_dir=`"$APXS" -q libexecdir`
 AC_MSG_RESULT([$system_modules_dir])
 
 AC_SUBST(system_modules_dir)
+
+# Try to figure out which MPM we should use.
+AC_MSG_CHECKING([for an installed MPM module to load during test])
+
+AS_IF([test "x$TEST_MPM" = "x"], [
+  # No TEST_MPM was supplied on the command line.
+  mpm_comment="# "
+  TEST_MPM=builtin
+
+  module=`find $system_modules_dir -name 'mod_mpm_*.so' -print -quit`
+  AS_IF([test "x$module" != "x"], [
+    mpm_comment=
+    module=${module##*mod_mpm_}
+    TEST_MPM=${module%.so}
+  ])
+], [
+  # The user supplied an explicit TEST_MPM.
+  AS_IF([test "x$TEST_MPM" = "xbuiltin"],
+        [mpm_comment="# "],
+        [mpm_comment=])
+])
+AC_MSG_RESULT([$TEST_MPM])
+AC_SUBST(mpm_comment)
+
+# Check to make sure the MPM exists.
+module_path=$system_modules_dir/mod_mpm_$TEST_MPM.so
+AS_IF([test "x$TEST_MPM" != "xbuiltin" -a ! -f "$module_path"],
+      [AC_MSG_WARN([TEST_MPM value $TEST_MPM does not appear to refer to an installed module ($module_path)])])
 
 # Define the template-generated files.
 AC_CONFIG_FILES([

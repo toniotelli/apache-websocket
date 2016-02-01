@@ -5,6 +5,8 @@
 Listen 59153
 PidFile logs/httpd.pid
 
+@mpm_comment@LoadModule mpm_@TEST_MPM@_module "@system_modules_dir@/mod_mpm_@TEST_MPM@.so"
+
 <IfModule !authn_core_module>
   LoadModule authn_core_module "@system_modules_dir@/mod_authn_core.so"
 </IfModule>
