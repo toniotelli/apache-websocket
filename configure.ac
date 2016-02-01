@@ -49,9 +49,17 @@ AC_PATH_PROG([LIBTOOL], [libtool], [no])
 AS_IF([test "x$LIBTOOL" = "xno"],
       [AC_MSG_ERROR([could not find an installed libtool])])
 
+# Figure out where the installed httpd keeps its modules.
+AC_MSG_CHECKING([for the httpd modules directory])
+system_modules_dir=`"$APXS" -q libexecdir`
+AC_MSG_RESULT([$system_modules_dir])
+
+AC_SUBST(system_modules_dir)
+
 # Define the template-generated files.
 AC_CONFIG_FILES([
   Makefile
+  test/httpd/test.conf
 ])
 
 # Output everything.

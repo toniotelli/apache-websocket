@@ -19,9 +19,6 @@ comma := ,
 APXS_CFLAGS := $(addprefix -Wc$(comma),$(CFLAGS))
 APXS_LDFLAGS := $(addprefix -Wl$(comma),$(LDFLAGS))
 
-# Path to the installed httpd's modules directory.
-MODULES_DIR := $(shell $(APXS) -q libexecdir)
-
 # List of example plugins -- one for each *.c in the examples/ directory.
 EXAMPLES := $(wildcard examples/*.c)
 EXAMPLE_PLUGINS := $(patsubst %.c,%.la,$(EXAMPLES))
@@ -94,5 +91,5 @@ $(TEST_MODULES_ALL_PATHS):
 
 start-test-server: test-modules test-folders
 start-test-server stop-test-server:
-	SYSTEM_MODULES_DIR=$(MODULES_DIR) $(HTTPD) -d "$(CURDIR)/test/httpd" \
-		-f test.conf -k $(patsubst %-test-server,%,$@)
+	$(HTTPD) -d "$(CURDIR)/test/httpd" -f test.conf \
+	         -k $(patsubst %-test-server,%,$@)

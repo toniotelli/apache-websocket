@@ -8,3 +8,5 @@ testresults.tap
 httpd/htdocs
 httpd/logs
 httpd/modules
+
+httpd/test.conf

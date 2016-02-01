@@ -6,13 +6,13 @@ Listen 59153
 PidFile logs/httpd.pid
 
 <IfModule !authn_core_module>
-  LoadModule authn_core_module ${SYSTEM_MODULES_DIR}/mod_authn_core.so
+  LoadModule authn_core_module "@system_modules_dir@/mod_authn_core.so"
 </IfModule>
 <IfModule !authz_core_module>
-  LoadModule authz_core_module ${SYSTEM_MODULES_DIR}/mod_authz_core.so
+  LoadModule authz_core_module "@system_modules_dir@/mod_authz_core.so"
 </IfModule>
 <IfModule !unixd_module>
-  LoadModule unixd_module ${SYSTEM_MODULES_DIR}/mod_unixd.so
+  LoadModule unixd_module "@system_modules_dir@/mod_unixd.so"
 </IfModule>
 
 LoadModule websocket_module modules/mod_websocket.so
