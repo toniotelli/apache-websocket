@@ -88,6 +88,28 @@ module_path=$system_modules_dir/mod_mpm_$TEST_MPM.so
 AS_IF([test "x$TEST_MPM" != "xbuiltin" -a ! -f "$module_path"],
       [AC_MSG_WARN([TEST_MPM value $TEST_MPM does not appear to refer to an installed module ($module_path)])])
 
+# Figure out which version of httpd is installed.
+AC_MSG_CHECKING([the httpd version])
+httpd_version=`"$HTTPD" -v | sed -n -e "s/^.*Apache\/\(2\.@<:@0-9@:>@\+\).*$/\1/p"`
+AS_IF([test "x$httpd_version" = "x2.2"],
+      [
+        # Enable the 2.2 config.
+        conf_22=
+        conf_24="# "
+      ],
+      [
+        # Enable the 2.4 config.
+        conf_22="# "
+        conf_24=
+
+        AS_IF([test "x$httpd_version" != "x2.4"],
+              [ httpd_version="unknown (assuming 2.4)" ])
+      ])
+AC_MSG_RESULT([$httpd_version])
+
+AC_SUBST(conf_22)
+AC_SUBST(conf_24)
+
 # Define the template-generated files.
 AC_CONFIG_FILES([
   Makefile

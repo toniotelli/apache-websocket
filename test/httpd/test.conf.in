@@ -7,21 +7,26 @@ PidFile logs/httpd.pid
 
 @mpm_comment@LoadModule mpm_@TEST_MPM@_module "@system_modules_dir@/mod_mpm_@TEST_MPM@.so"
 
-<IfModule !authz_core_module>
-  LoadModule authz_core_module "@system_modules_dir@/mod_authz_core.so"
-</IfModule>
-<IfModule !unixd_module>
-  LoadModule unixd_module "@system_modules_dir@/mod_unixd.so"
-</IfModule>
+@conf_22@<IfModule !authz_host_module>
+@conf_22@  LoadModule authz_host_module "@system_modules_dir@/mod_authz_host.so"
+@conf_22@</IfModule>
+@conf_24@<IfModule !authz_core_module>
+@conf_24@  LoadModule authz_core_module "@system_modules_dir@/mod_authz_core.so"
+@conf_24@</IfModule>
+@conf_24@<IfModule !unixd_module>
+@conf_24@  LoadModule unixd_module "@system_modules_dir@/mod_unixd.so"
+@conf_24@</IfModule>
 
 LoadModule websocket_module modules/mod_websocket.so
 
 DocumentRoot htdocs
 <Directory htdocs>
-  Require all granted
+@conf_22@  Allow from all
+@conf_24@  Require all granted
 </Directory>
 
-LogLevel websocket:debug
+@conf_22@LogLevel debug
+@conf_24@LogLevel websocket:debug
 
 #
 # Test Configuration
