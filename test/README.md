@@ -7,7 +7,7 @@ This test script makes use of
 
 * Python 2.7.x (TestSuite doesn't do Python 3 yet)
 * [pip](https://pip.pypa.io/)
-* GNU Make (or just run each test suite manually)
+* GNU Autotools (or just run the test server and each test suite manually)
 
 ## Setup
 
@@ -21,31 +21,38 @@ If you don't want to install globally, you can alternatively run
     $ pip install -r requirements.txt --user
     $ export PATH=$PATH:$HOME/.local/bin
 
-See your pip documentation for other installation options.
+or install via `virtualenv` or similar. See your pip/virtualenv documentation
+for other installation options.
 
 ## Testing
 
-Compile and install the `mod_websocket_echo` and `mod_websocket_dumb_increment`
-example modules (see the main project README for instructions), include (or
-copy-paste) the `test.conf` snippet from this directory in your server config,
-and restart your server.  (Note that the test suite assumes the server is
-running at `ws://localhost`.)
+For now, the test suite can only be run fully automatically with Linux and GNU
+Autotools; Windows instructions are forthcoming.
 
-Then, from this directory, run
+### Linux/Autotools
 
-    $ make test
+After you have installed the prerequisites, run
 
-The test suite is large, so it may take a few minutes to run. The results will
-be parsed and output as a [TAP](http://testanything.org) stream.
+    $ make check
+
+from the top-level directory. The test suite is large, so it may take a few
+minutes to run. The results will be parsed and output as a
+[TAP](http://testanything.org) stream.
 
 If you want to just get the TAP output itself so you can pipe it into your
 favorite [TAP consumer](http://testanything.org/consumers.html), run the
 following *after* you have already run the test suite once and generated the
-`test-results` folder:
+`test/test-results` folder:
 
+    $ make start-test-server
+    $ cd test
     $ ./aggregate.py
 
 This will output the results again without re-running the Autobahn test suite.
+Remember to stop the standalone test server afterwards with
+
+    $ cd ..
+    $ make stop-test-server
 
 ## Adding Tests
 

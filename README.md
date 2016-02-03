@@ -47,6 +47,53 @@ case, use:
 
     $ sudo apxs -i -a -c mod_websocket.c
 
+### GNU Autotools (Linux-only)
+
+If you're comfortable with autotools, configure and Makefile templates are
+provided. This is (currently) the only supported way to run the builtin test
+suite; see `test/README.md`.
+
+If you've just cloned the repository, you'll need to run the following commands
+once:
+
+    $ ./autogen.sh         # creates the configure script
+    $ ./configure          # adapts the build to your system
+
+Thereafter, you can build/test/install with the usual trio:
+
+    $ make                 # builds mod_websocket and the example plugins
+    $ make check           # runs the built-in Python test suite
+    $ [sudo] make install  # installs mod_websocket to httpd's modules directory
+
+#### Configure Options
+
+The configure script primarily cares about three programs in your installation:
+`apxs`, `apachectl`, and `httpd`. It uses these programs to build and test the
+module. By default it searches for these in your PATH, but to direct it to a
+custom installation of your own, set the `APACHE_BINDIR` variable at configure
+time:
+
+    $ ./configure APACHE_BINDIR=/opt/apache2/bin
+
+(You can also set all three paths separately; see `./configure --help`.)
+
+The test suite also needs to enable a server MPM for the standalone test server.
+If you have statically compiled an MPM into httpd, configure will use that;
+otherwise it will use the first MPM DSO it finds installed in your modules
+directory. To override its choice, use the `TEST_MPM` variable:
+
+    $ ./configure TEST_MPM=worker
+
+`TEST_MPM` accepts the name of any installed MPM module, or `'builtin'` to force
+the use of a static MPM.
+
+#### Other Helpful Rules
+
+    $ make clean                         # removes the build artifacts
+    $ [sudo] make install-examples       # installs the example plugins
+    $ [sudo] make [start|stop|restart]   # starts/stops/restarts httpd via apachectl
+    $ make [start|stop]-test-server      # starts/stops the standalone test server
+
 ### CMake (Windows-only)
 
 An experimental `CMakeLists.txt` is provided for Windows CMake builds only. It
