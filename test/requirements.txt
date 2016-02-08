@@ -1,5 +1,5 @@
 autobahn[twisted,accelerate]~=0.10.7
-autobahntestsuite~=0.7.4
+autobahntestsuite~=0.7.5
 psutil>=3.2.2
 pytest>=2.8.1
 pytest-twisted>=1.5
