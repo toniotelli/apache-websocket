@@ -222,6 +222,15 @@ to set the maximum message size is set to 64 megabytes:
       </Location>
     </IfModule>
 
+If you are using extremely small values for `MaxMessageSize`, be aware that its
+limit also applies to control frame payloads. As an example, with a
+`MaxMessageSize` of 30, the maximum length of a close reason message accepted by
+a server will be 28 bytes (2 bytes for the close code plus 28 for the message
+reaches the limit of 30). Any larger payloads will result in a closed
+connection. It's recommended that you go no lower than 125 (the maximum size of
+a WebSocket control frame payload) to avoid closing the connection on correctly
+implemented clients.
+
 ### `WebSocketOriginCheck`
 
 The WebSocket protocol includes protection against cross-site request forgeries,
