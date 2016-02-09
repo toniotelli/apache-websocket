@@ -66,3 +66,10 @@ DocumentRoot htdocs
   WebSocketTrustedOrigin http://origin-one https://origin-two:55
   WebSocketTrustedOrigin https://origin-three
 </Location>
+
+<Location /size-limit>
+  SetHandler websocket-handler
+  WebSocketHandler modules/mod_websocket_echo.so echo_init
+
+  MaxMessageSize 4
+</Location>

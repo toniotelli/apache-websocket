@@ -70,7 +70,7 @@ typedef struct
     char *location;
     apr_dso_handle_t *res_handle;
     WebSocketPlugin *plugin;
-    apr_int64_t payload_limit;
+    apr_int64_t message_limit;
     int allow_reserved; /* whether to allow reserved status codes */
     int origin_check;   /* how to check the Origin during a handshake */
     apr_hash_t *trusted_origins; /* whitelist for ORIGIN_CHECK_TRUSTED */
@@ -142,7 +142,7 @@ static void *mod_websocket_create_dir_config(apr_pool_t *p, char *path)
         conf = apr_pcalloc(p, sizeof(websocket_config_rec));
         if (conf != NULL) {
             conf->location = apr_pstrdup(p, path);
-            conf->payload_limit = 32 * 1024 * 1024;
+            conf->message_limit = 32 * 1024 * 1024;
             conf->origin_check = ORIGIN_CHECK_SAME;
             conf->trusted_origins = apr_hash_make(p);
         }
@@ -280,9 +280,9 @@ static const char *mod_websocket_conf_max_message_size(cmd_parms *cmd,
     char *response;
 
     if ((conf != NULL) && (size != NULL)) {
-        apr_int64_t payload_limit = apr_atoi64(size);
-        if (payload_limit > 0) {
-            conf->payload_limit = payload_limit;
+        apr_int64_t message_limit = apr_atoi64(size);
+        if (message_limit > 0) {
+            conf->message_limit = message_limit;
             response = NULL;
         }
         else {
@@ -810,6 +810,7 @@ typedef struct _WebSocketFrameData
     unsigned char fin;
     unsigned char opcode;
     unsigned int utf8_state;
+    apr_int64_t message_length; /* length of the current message so far */
 } WebSocketFrameData;
 
 /* Variables that need to persist across calls to mod_websocket_handle_incoming */
@@ -823,7 +824,7 @@ typedef struct
     WebSocketFrameData control_frame;
     WebSocketFrameData message_frame;
     WebSocketFrameData *frame;
-    apr_int64_t payload_length;
+    apr_int64_t payload_length; /* length of the current frame */
     apr_int64_t mask_offset;
     apr_int64_t extension_bytes_remaining;
     int payload_length_bytes_remaining;
@@ -1091,9 +1092,12 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
                 state->payload_length_bytes_remaining--;
             }
             if (state->payload_length_bytes_remaining == 0) {
+                state->frame->message_length += state->payload_length;
+
                 if ((state->payload_length < 0) ||
-                    (state->payload_length > conf->payload_limit)) {
-                    /* Invalid payload length */
+                    (state->frame->message_length < 0) ||
+                    (state->frame->message_length > conf->message_limit)) {
+                    /* Invalid message length */
                     state->framing_state = DATA_FRAMING_CLOSE;
                     state->status_code = (server->state->protocol_version >= 13) ?
                                           STATUS_CODE_MESSAGE_TOO_LARGE :
@@ -1310,6 +1314,7 @@ static void mod_websocket_handle_incoming(const WebSocketServer *server,
                                 free(state->frame->application_data);
                                 state->frame->application_data = NULL;
                             }
+                            state->frame->message_length = 0;
                             application_data_offset = 0;
                         }
                     }
