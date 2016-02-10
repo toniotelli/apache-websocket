@@ -13,9 +13,9 @@ PidFile logs/httpd.pid
 @conf_24@<IfModule !authz_core_module>
 @conf_24@  LoadModule authz_core_module "@system_modules_dir@/mod_authz_core.so"
 @conf_24@</IfModule>
-@conf_24@<IfModule !unixd_module>
-@conf_24@  LoadModule unixd_module "@system_modules_dir@/mod_unixd.so"
-@conf_24@</IfModule>
+@conf_24@@conf_unix@<IfModule !unixd_module>
+@conf_24@@conf_unix@  LoadModule unixd_module "@system_modules_dir@/mod_unixd.so"
+@conf_24@@conf_unix@</IfModule>
 
 LoadModule websocket_module modules/mod_websocket.so
 

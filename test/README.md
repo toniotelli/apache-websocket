@@ -7,7 +7,9 @@ This test script makes use of
 
 * Python 2.7.x (TestSuite doesn't do Python 3 yet)
 * [pip](https://pip.pypa.io/)
-* GNU Autotools (or just run the test server and each test suite manually)
+* \[Linux\] GNU Autotools (or just run the test server and each test suite
+  manually)
+* \[Windows\] PowerShell 2.0 (or greater)
 
 ## Setup
 
@@ -25,9 +27,6 @@ or install via `virtualenv` or similar. See your pip/virtualenv documentation
 for other installation options.
 
 ## Testing
-
-For now, the test suite can only be run fully automatically with Linux and GNU
-Autotools; Windows instructions are forthcoming.
 
 ### Linux/Autotools
 
@@ -53,6 +52,49 @@ Remember to stop the standalone test server afterwards with
 
     $ cd ..
     $ make stop-test-server
+
+### Windows
+
+For now, the test suite can only be run automatically with Linux and GNU
+Autotools; Windows requires additional manual work.
+
+Install the Python prerequisites (see the Setup section, above) and build both
+the module and the example plugins (if using CMake, make sure `BUILD_EXAMPLES`
+is true when you generate the build). Open a command prompt from the `test`
+directory and run
+
+    > powershell -ExecutionPolicy Bypass -File setup-win-test.ps1 -ModuleDirectory MODULE_DIR -Version VERSION
+
+where `MODULE_DIR` is the directory containing your installation's modules, and
+`VERSION` is either '2.2' or '2.4' depending on your installed httpd. For
+example:
+
+    > powershell -ExecutionPolicy Bypass -File setup-win-test.ps1 -ModuleDirectory "C:\Program Files\Apache Software Foundation\Apache2.4\modules" -Version 2.4
+
+_Note that the `-ExecutionPolicy Bypass` argument indicates to PowerShell that
+you trust the `setup-win-test.ps1` script to run on your system. If you don't
+trust it, don't run it..._
+
+This script generates a test configuration and several supporting test
+directories. Copy `mod_websocket.so` and the example plugins into the
+`test/httpd/modules` directory that is created, and launch httpd with the
+generated configuration:
+
+    > httpd -d "WEBSOCKET_DIR\test\httpd" -f test.conf
+
+where `WEBSOCKET_DIR` is the full path to your apache-websocket folder.
+
+Open a new prompt (since httpd will be running in the old one), change back to
+the `tests` directory, and run the Autobahn test suite with
+
+    > wstest -m fuzzingclient && python present.py
+
+Then run mod_websocket's pytest suite with
+
+    > py.test
+
+Once the test suite has completed, you can stop the temporary httpd instance in
+your first prompt window with Ctrl-C.
 
 ## Adding Tests
 

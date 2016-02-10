@@ -50,8 +50,8 @@ case, use:
 ### GNU Autotools (Linux-only)
 
 If you're comfortable with autotools, configure and Makefile templates are
-provided. This is (currently) the only supported way to run the builtin test
-suite; see `test/README.md`.
+provided. This is the only supported way to run the builtin test suite on Linux;
+see `test/README.md`.
 
 If you've just cloned the repository, you'll need to run the following commands
 once:
