@@ -109,6 +109,7 @@ AC_MSG_RESULT([$httpd_version])
 
 AC_SUBST(conf_22)
 AC_SUBST(conf_24)
+AC_SUBST(conf_unix, "")
 
 # Define the template-generated files.
 AC_CONFIG_FILES([
