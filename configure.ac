@@ -1,5 +1,5 @@
 # Setup.
-AC_INIT([mod_websocket], [0.1.0])
+AC_INIT([mod_websocket], [0.1.1])
 AC_CONFIG_SRCDIR([mod_websocket.c])
 
 # Declare optional user-defined variables.
