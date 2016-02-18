@@ -28,22 +28,23 @@ INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/websocket.load DESTINATION ${APACHE_CO
 
 ### Build Examples
 IF (BUILD_EXAMPLES)
-  FILE(GLOB exfiles ${CMAKE_SOURCE_DIR}/examples/*.c)
+  SET(example_targets
+        mod_websocket_echo
+        mod_websocket_dumb_increment)
 
-  # Construct 1 Target per c files
-  FOREACH(it ${exfiles})
-    # Get module name
-    GET_FILENAME_COMPONENT(modname ${it} NAME_WE)
-
-    # lib
-    ADD_LIBRARY(${modname} MODULE ${it})
-    TARGET_LINK_LIBRARIES(${modname} ${APACHE_LIBRARY} ${APR_LIBRARY})
+  # Construct a target for each example
+  FOREACH(modname ${example_targets})
+    ADD_LIBRARY(${modname} MODULE examples/${modname}.c)
 
     # properties
     SET_TARGET_PROPERTIES(${modname} PROPERTIES PREFIX "")
     SET_PROPERTY(TARGET ${modname} PROPERTY C_STANDARD 11)
+  ENDFOREACH()
 
-    # Install
-    INSTALL(TARGETS ${modname} DESTINATION ${APACHE_MODULE_DIR})
-  ENDFOREACH(it)
+  # Only the dumb-increment example needs APR.
+  TARGET_LINK_LIBRARIES(mod_websocket_dumb_increment ${APR_LIBRARY})
+
+  # Install
+  INSTALL(TARGETS ${example_targets}
+          DESTINATION ${APACHE_MODULE_DIR})
 ENDIF(BUILD_EXAMPLES)
