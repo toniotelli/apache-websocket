@@ -19,12 +19,16 @@ INCLUDE_DIRECTORIES(${APR_INCLUDE_DIR})
 ADD_LIBRARY(mod_websocket MODULE mod_websocket.c)
 TARGET_LINK_LIBRARIES(mod_websocket ${APACHE_LIBRARY} ${APR_LIBRARY})
 
-SET_TARGET_PROPERTIES(mod_websocket PROPERTIES PREFIX "")
-SET_PROPERTY(TARGET mod_websocket PROPERTY C_STANDARD 11)
+SET_TARGET_PROPERTIES(mod_websocket
+                      PROPERTIES
+                        PREFIX     ""
+                        C_STANDARD 11)
 
 ## Install Targets
-INSTALL(TARGETS mod_websocket DESTINATION ${APACHE_MODULE_DIR})
-INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/websocket.load DESTINATION ${APACHE_CONF_DIR}/mods-available)
+INSTALL(TARGETS mod_websocket
+        DESTINATION ${APACHE_MODULE_DIR})
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/websocket.load
+        DESTINATION ${APACHE_CONF_DIR}/mods-available)
 
 ### Build Examples
 IF (BUILD_EXAMPLES)
@@ -35,11 +39,12 @@ IF (BUILD_EXAMPLES)
   # Construct a target for each example
   FOREACH(modname ${example_targets})
     ADD_LIBRARY(${modname} MODULE examples/${modname}.c)
-
-    # properties
-    SET_TARGET_PROPERTIES(${modname} PROPERTIES PREFIX "")
-    SET_PROPERTY(TARGET ${modname} PROPERTY C_STANDARD 11)
   ENDFOREACH()
+
+  SET_TARGET_PROPERTIES(${example_targets}
+                        PROPERTIES
+                          PREFIX     ""
+                          C_STANDARD 11)
 
   # Only the dumb-increment example needs APR.
   TARGET_LINK_LIBRARIES(mod_websocket_dumb_increment ${APR_LIBRARY})
