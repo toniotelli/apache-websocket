@@ -14,9 +14,9 @@ OPTION(INSTALL_PDB    "Install .pdb files (if generated)" OFF)
 
 
 IF(WIN32)
-  ## Build For Window
-  INCLUDE(CMakeWin32.cmake)
+  ## Build For Windows
+  INCLUDE(cmake/CMakeWin32.cmake)
 ELSE(WIN32)
-  ## Build on Unix plateforms using FindApache.cmake and FindAPR.cmake
-  INCLUDE(CMakeUnix.cmake)
+  ## Build on Unix platforms using FindAPACHE.cmake and FindAPR.cmake
+  INCLUDE(cmake/CMakeUnix.cmake)
 ENDIF(WIN32)
