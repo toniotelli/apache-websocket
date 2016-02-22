@@ -2,14 +2,11 @@
 SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 ## Add FindPackages macros
-LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
 
 ## Apache and Apr are required for this part
 FIND_PACKAGE(APACHE REQUIRED)
 FIND_PACKAGE(APR REQUIRED)
-
-## Configuration files
-CONFIGURE_FILE(websocket.load.in websocket.load @ONLY)
 
 ## Necessary Includes
 INCLUDE_DIRECTORIES(${APACHE_INCLUDE_DIR})
@@ -17,18 +14,19 @@ INCLUDE_DIRECTORIES(${APR_INCLUDE_DIR})
 
 ## Create The mod_websocket.so
 ADD_LIBRARY(mod_websocket MODULE mod_websocket.c)
-TARGET_LINK_LIBRARIES(mod_websocket ${APACHE_LIBRARY} ${APR_LIBRARY})
+TARGET_LINK_LIBRARIES(mod_websocket ${APR_LIBRARIES})
 
 SET_TARGET_PROPERTIES(mod_websocket
                       PROPERTIES
                         PREFIX     ""
                         C_STANDARD 11)
 
-## Install Targets
-INSTALL(TARGETS mod_websocket
-        DESTINATION ${APACHE_MODULE_DIR})
-INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/websocket.load
-        DESTINATION ${APACHE_CONF_DIR}/mods-available)
+## Install Targets using apxs
+INSTALL(CODE "
+  EXECUTE_PROCESS(COMMAND
+    ${APACHE_APXS_EXECUTABLE} -i -A -n \"websocket_module\" mod_websocket.so
+  )
+")
 
 ### Build Examples
 IF (BUILD_EXAMPLES)
@@ -47,9 +45,14 @@ IF (BUILD_EXAMPLES)
                           C_STANDARD 11)
 
   # Only the dumb-increment example needs APR.
-  TARGET_LINK_LIBRARIES(mod_websocket_dumb_increment ${APR_LIBRARY})
+  TARGET_LINK_LIBRARIES(mod_websocket_dumb_increment ${APR_LIBRARIES})
 
-  # Install
-  INSTALL(TARGETS ${example_targets}
-          DESTINATION ${APACHE_MODULE_DIR})
+  # Install using apxs.
+  FOREACH(target ${example_targets})
+    INSTALL(CODE "
+      EXECUTE_PROCESS(COMMAND
+        ${APACHE_APXS_EXECUTABLE} -i -n \"dummy\" ${target}.so
+      )
+    ")
+  ENDFOREACH()
 ENDIF(BUILD_EXAMPLES)
