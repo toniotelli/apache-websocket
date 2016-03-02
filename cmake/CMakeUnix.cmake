@@ -24,7 +24,7 @@ SET_TARGET_PROPERTIES(mod_websocket
 ## Install Targets using apxs
 INSTALL(CODE "
   EXECUTE_PROCESS(COMMAND
-    ${APACHE_APXS_EXECUTABLE} -i -A -n \"websocket_module\" mod_websocket.so
+    ${APACHE_APXS_EXECUTABLE} -i -A -n \"websocket\" mod_websocket.so
   )
 ")
 
