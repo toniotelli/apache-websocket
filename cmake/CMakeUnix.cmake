@@ -28,6 +28,9 @@ INSTALL(CODE "
   )
 ")
 
+## Install Headers in APACHE_INCLUDE_DIR
+INSTALL(FILES websocket_plugin.h DESTINATION ${APACHE_INCLUDE_DIR})
+
 ### Build Examples
 IF (BUILD_EXAMPLES)
   SET(example_targets
