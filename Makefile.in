@@ -33,7 +33,7 @@ EXAMPLE_INSTALLS := $(addprefix install-,$(EXAMPLE_NAMES))
 all: mod_websocket.la examples
 
 install: mod_websocket.la
-	$(APXS) -i $<
+	$(APXS) -i -A $<
 
 clean:
 	rm -f *.lo *.la *.slo *.o
